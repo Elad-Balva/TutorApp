@@ -4,7 +4,9 @@ public record LessonReadyToCompleteParticipantDto(
     Guid StudentId,
     string StudentName,
     decimal HourlyPrice,
-    decimal DurationInHours
+    decimal DurationInHours,
+    string? AddressLine,
+    string? LocationNotes
 );
 
 public record LessonReadyToCompleteDto(
@@ -12,6 +14,7 @@ public record LessonReadyToCompleteDto(
     DateTimeOffset StartTime,
     string Subject,
     decimal ExpectedDurationInHours,
+    bool IsInPerson,
     List<LessonReadyToCompleteParticipantDto> Participants
 );
 

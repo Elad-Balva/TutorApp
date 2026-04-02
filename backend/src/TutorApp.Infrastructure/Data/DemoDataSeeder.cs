@@ -15,7 +15,8 @@ public static class DemoDataSeeder
         var now = DateTimeOffset.UtcNow;
 
         var hasDueScheduledLesson = await db.Lessons.AnyAsync(
-            l => l.Status == LessonStatus.Scheduled && l.StartTime <= now,
+            l => l.Status == LessonStatus.Scheduled &&
+                 l.StartTime.AddHours((double)l.ExpectedDurationInHours) <= now,
             ct
         );
 
@@ -49,7 +50,17 @@ public static class DemoDataSeeder
 
             var students = new[]
             {
-                new Student { Id = s1, TeacherId = TeacherId, Name = "נועה כהן", PhoneNumber = "050-1112233", BaseHourlyPrice = 120m, IsActive = true },
+                new Student
+                {
+                    Id = s1,
+                    TeacherId = TeacherId,
+                    Name = "נועה כהן",
+                    PhoneNumber = "050-1112233",
+                    BaseHourlyPrice = 120m,
+                    AddressLine = "רחוב הרצל 1, תל אביב",
+                    LocationNotes = "קומה 3, דירה 12",
+                    IsActive = true
+                },
                 new Student { Id = s2, TeacherId = TeacherId, Name = "איתי לוי", PhoneNumber = "052-4445566", BaseHourlyPrice = 100m, IsActive = true },
                 new Student { Id = s3, TeacherId = TeacherId, Name = "מיה דוד", PhoneNumber = "054-7778899", BaseHourlyPrice = 140m, IsActive = true },
                 new Student { Id = s4, TeacherId = TeacherId, Name = "יונתן ברק", PhoneNumber = "053-2223344", BaseHourlyPrice = 110m, IsActive = true },

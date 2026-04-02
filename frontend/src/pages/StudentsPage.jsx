@@ -33,6 +33,8 @@ export function StudentsPage() {
   const [name, setName] = useState("");
   const [phoneNumber, setPhoneNumber] = useState("");
   const [baseHourlyPrice, setBaseHourlyPrice] = useState("120");
+  const [addressLine, setAddressLine] = useState("");
+  const [locationNotes, setLocationNotes] = useState("");
   const [isActive, setIsActive] = useState(true);
 
   const studentsQuery = useQuery({
@@ -41,13 +43,15 @@ export function StudentsPage() {
   });
 
   const addMutation = useMutation({
-    mutationFn: ({ name, phoneNumber, baseHourlyPrice }) =>
-      createStudent({ name, phoneNumber, baseHourlyPrice }),
+    mutationFn: ({ name, phoneNumber, baseHourlyPrice, addressLine, locationNotes }) =>
+      createStudent({ name, phoneNumber, baseHourlyPrice, addressLine, locationNotes }),
     onSuccess: () => {
       setAddOpen(false);
       setName("");
       setPhoneNumber("");
       setBaseHourlyPrice("120");
+      setAddressLine("");
+      setLocationNotes("");
       queryClient.invalidateQueries({ queryKey: ["students"] });
     },
   });
@@ -75,12 +79,14 @@ export function StudentsPage() {
     setName(student.name);
     setPhoneNumber(student.phoneNumber || "");
     setBaseHourlyPrice(String(student.baseHourlyPrice));
+    setAddressLine(student.addressLine || "");
+    setLocationNotes(student.locationNotes || "");
     setIsActive(student.isActive);
     setEditOpen(true);
   };
 
   return (
-    <Box sx={{ p: 2, pb: 10, display: "grid", gap: 2 }} dir="rtl">
+    <Box sx={{ p: 2, pb: 10, display: "grid", gap: 2 }}>
       <Typography variant="h5" fontWeight={800}>
         תלמידים
       </Typography>
@@ -111,6 +117,12 @@ export function StudentsPage() {
               <Typography variant="body2" color="text.secondary">
                 {s.phoneNumber || "ללא טלפון"} | מחיר בסיס: {formatIls(s.baseHourlyPrice)}
               </Typography>
+              {s.addressLine ? (
+                <Typography variant="body2" color="text.secondary">
+                  כתובת: {s.addressLine}
+                  {s.locationNotes ? ` · ${s.locationNotes}` : ""}
+                </Typography>
+              ) : null}
               <Button variant="outlined" size="small" onClick={() => openEdit(s)} sx={{ mt: 0.5, justifySelf: "start" }}>
                 ערוך
               </Button>
@@ -132,6 +144,21 @@ export function StudentsPage() {
             onChange={(e) => setBaseHourlyPrice(e.target.value)}
             inputProps={{ min: 0, step: 1 }}
           />
+          <TextField
+            label="כתובת לניווט (אופציונלי)"
+            value={addressLine}
+            onChange={(e) => setAddressLine(e.target.value)}
+            inputProps={{ maxLength: 500 }}
+            helperText="משמש לפתיחת Waze משיעורים פרונטליים"
+          />
+          <TextField
+            label="הערות הגעה (קומה, דירה, קוד שער…)"
+            value={locationNotes}
+            onChange={(e) => setLocationNotes(e.target.value)}
+            inputProps={{ maxLength: 300 }}
+            multiline
+            minRows={2}
+          />
         </DialogContent>
         <DialogActions>
           <Button onClick={() => setAddOpen(false)}>ביטול</Button>
@@ -143,6 +170,8 @@ export function StudentsPage() {
                 name: name.trim(),
                 phoneNumber: phoneNumber.trim() || null,
                 baseHourlyPrice: Number(baseHourlyPrice),
+                addressLine: addressLine.trim() || null,
+                locationNotes: locationNotes.trim() || null,
               })
             }
           >
@@ -163,6 +192,21 @@ export function StudentsPage() {
             onChange={(e) => setBaseHourlyPrice(e.target.value)}
             inputProps={{ min: 0, step: 1 }}
           />
+          <TextField
+            label="כתובת לניווט (אופציונלי)"
+            value={addressLine}
+            onChange={(e) => setAddressLine(e.target.value)}
+            inputProps={{ maxLength: 500 }}
+            helperText="משמש לפתיחת Waze משיעורים פרונטליים"
+          />
+          <TextField
+            label="הערות הגעה (קומה, דירה, קוד שער…)"
+            value={locationNotes}
+            onChange={(e) => setLocationNotes(e.target.value)}
+            inputProps={{ maxLength: 300 }}
+            multiline
+            minRows={2}
+          />
           <FormControlLabel control={<Checkbox checked={isActive} onChange={(e) => setIsActive(e.target.checked)} />} label="פעיל" />
         </DialogContent>
         <DialogActions>
@@ -177,6 +221,8 @@ export function StudentsPage() {
                   name: name.trim(),
                   phoneNumber: phoneNumber.trim() || null,
                   baseHourlyPrice: Number(baseHourlyPrice),
+                  addressLine: addressLine.trim() || null,
+                  locationNotes: locationNotes.trim() || null,
                   isActive,
                 },
               })

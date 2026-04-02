@@ -6,6 +6,8 @@ public record UpdateStudentRequest(
     [Required, MaxLength(120)] string Name,
     [MaxLength(30)] string? PhoneNumber,
     [Range(0, 99999999.99)] decimal BaseHourlyPrice,
+    [MaxLength(500)] string? AddressLine,
+    [MaxLength(300)] string? LocationNotes,
     bool IsActive
 );
 

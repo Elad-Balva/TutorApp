@@ -34,6 +34,11 @@ namespace TutorApp.Infrastructure.Data.Migrations
                         .HasColumnType("numeric(10,2)")
                         .HasDefaultValue(1.00m);
 
+                    b.Property<bool>("IsInPerson")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("boolean")
+                        .HasDefaultValue(true);
+
                     b.Property<DateTimeOffset>("StartTime")
                         .HasColumnType("timestamp with time zone");
 
@@ -128,12 +133,20 @@ namespace TutorApp.Infrastructure.Data.Migrations
                         .ValueGeneratedOnAdd()
                         .HasColumnType("uuid");
 
+                    b.Property<string>("AddressLine")
+                        .HasMaxLength(500)
+                        .HasColumnType("character varying(500)");
+
                     b.Property<decimal>("BaseHourlyPrice")
                         .HasPrecision(10, 2)
                         .HasColumnType("numeric(10,2)");
 
                     b.Property<bool>("IsActive")
                         .HasColumnType("boolean");
+
+                    b.Property<string>("LocationNotes")
+                        .HasMaxLength(300)
+                        .HasColumnType("character varying(300)");
 
                     b.Property<string>("Name")
                         .IsRequired()

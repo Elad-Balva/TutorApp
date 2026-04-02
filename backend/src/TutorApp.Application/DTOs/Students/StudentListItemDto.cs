@@ -5,6 +5,8 @@ public record StudentListItemDto(
     string Name,
     string? PhoneNumber,
     bool IsActive,
-    decimal BaseHourlyPrice
+    decimal BaseHourlyPrice,
+    string? AddressLine,
+    string? LocationNotes
 );
 

@@ -28,6 +28,7 @@ public class LessonService : ILessonService
             StartTime = request.StartTime.ToUniversalTime(),
             Subject = request.Subject,
             ExpectedDurationInHours = request.ExpectedDurationInHours,
+            IsInPerson = request.IsInPerson ?? true,
             Status = LessonStatus.Scheduled
         };
 
@@ -123,22 +124,28 @@ public class LessonService : ILessonService
     {
         var now = DateTimeOffset.UtcNow;
 
-        var futureLessonRows = await _db.Lessons
-            .Where(x => x.Status == LessonStatus.Scheduled && x.StartTime > now)
+        var scheduledRows = await _db.Lessons
+            .Where(x => x.Status == LessonStatus.Scheduled)
             .OrderBy(x => x.StartTime)
-            .Take(50)
+            .Take(100)
             .Select(x => new
             {
                 x.Id,
                 x.StartTime,
                 x.Subject,
-                x.ExpectedDurationInHours
+                x.ExpectedDurationInHours,
+                x.IsInPerson
             })
             .ToListAsync(ct);
 
-        var futureLessons = new List<LessonDashboardItemDto>(futureLessonRows.Count);
-        foreach (var lesson in futureLessonRows)
+        var futureLessons = new List<LessonDashboardItemDto>();
+        var awaitingCompletionLessons = new List<LessonDashboardItemDto>();
+
+        foreach (var lesson in scheduledRows)
         {
+            var endUtc = lesson.StartTime.AddHours((double)lesson.ExpectedDurationInHours);
+            var isStillFuture = now < endUtc;
+
             var participants = await _db.LessonParticipants
                 .Where(lp => lp.LessonId == lesson.Id)
                 .Select(lp => new LessonParticipantDashboardItemDto(
@@ -148,23 +155,33 @@ public class LessonService : ILessonService
                     lp.DurationInHours,
                     lp.TotalPrice,
                     false,
-                    0m
+                    0m,
+                    lp.Student.AddressLine,
+                    lp.Student.LocationNotes
                 ))
                 .ToListAsync(ct);
 
             var totalPrice = participants.Sum(p => p.TotalPrice);
-
-            futureLessons.Add(new LessonDashboardItemDto(
+            var dto = new LessonDashboardItemDto(
                 lesson.Id,
                 lesson.StartTime,
                 lesson.Subject,
                 LessonStatus.Scheduled.ToString(),
                 lesson.ExpectedDurationInHours,
+                lesson.IsInPerson,
                 participants,
                 totalPrice,
                 0m
-            ));
+            );
+
+            if (isStillFuture)
+                futureLessons.Add(dto);
+            else
+                awaitingCompletionLessons.Add(dto);
         }
+
+        futureLessons = futureLessons.OrderBy(x => x.StartTime).Take(50).ToList();
+        awaitingCompletionLessons = awaitingCompletionLessons.OrderByDescending(x => x.StartTime).Take(50).ToList();
 
         var completedLessonRows = await _db.Lessons
             .Where(x => x.Status == LessonStatus.Completed)
@@ -174,7 +191,9 @@ public class LessonService : ILessonService
             {
                 x.Id,
                 x.StartTime,
-                x.Subject
+                x.Subject,
+                x.ExpectedDurationInHours,
+                x.IsInPerson
             })
             .ToListAsync(ct);
 
@@ -189,7 +208,9 @@ public class LessonService : ILessonService
                     lp.Student.Name,
                     lp.HourlyPrice,
                     lp.DurationInHours,
-                    lp.TotalPrice
+                    lp.TotalPrice,
+                    lp.Student.AddressLine,
+                    lp.Student.LocationNotes
                 })
                 .ToListAsync(ct);
 
@@ -214,7 +235,9 @@ public class LessonService : ILessonService
                     p.DurationInHours,
                     p.TotalPrice,
                     isPaid,
-                    outstanding
+                    outstanding,
+                    p.AddressLine,
+                    p.LocationNotes
                 ));
             }
 
@@ -226,14 +249,15 @@ public class LessonService : ILessonService
                 lesson.StartTime,
                 lesson.Subject,
                 LessonStatus.Completed.ToString(),
-                0m,
+                lesson.ExpectedDurationInHours,
+                lesson.IsInPerson,
                 participantDashboard,
                 participants.Sum(p => p.TotalPrice),
                 unpaidTotal
             ));
         }
 
-        return new LessonsDashboardDto(futureLessons, unpaidLessons);
+        return new LessonsDashboardDto(futureLessons, awaitingCompletionLessons, unpaidLessons);
     }
 
     public async Task<List<LessonReadyToCompleteDto>> GetReadyToCompleteLessonsAsync(CancellationToken ct)
@@ -241,7 +265,9 @@ public class LessonService : ILessonService
         var now = DateTimeOffset.UtcNow;
 
         var lessons = await _db.Lessons
-            .Where(x => x.Status == LessonStatus.Scheduled && x.StartTime <= now)
+            .Where(x =>
+                x.Status == LessonStatus.Scheduled &&
+                x.StartTime.AddHours((double)x.ExpectedDurationInHours) <= now)
             .OrderByDescending(x => x.StartTime)
             .Take(100)
             .Select(x => new
@@ -249,7 +275,8 @@ public class LessonService : ILessonService
                 x.Id,
                 x.StartTime,
                 x.Subject,
-                x.ExpectedDurationInHours
+                x.ExpectedDurationInHours,
+                x.IsInPerson
             })
             .ToListAsync(ct);
 
@@ -262,7 +289,9 @@ public class LessonService : ILessonService
                     lp.StudentId,
                     lp.Student.Name,
                     lp.HourlyPrice,
-                    lp.DurationInHours
+                    lp.DurationInHours,
+                    lp.Student.AddressLine,
+                    lp.Student.LocationNotes
                 ))
                 .ToListAsync(ct);
 
@@ -271,6 +300,7 @@ public class LessonService : ILessonService
                 lesson.StartTime,
                 lesson.Subject,
                 lesson.ExpectedDurationInHours,
+                lesson.IsInPerson,
                 participants
             ));
         }
@@ -290,6 +320,7 @@ public class LessonService : ILessonService
         lesson.Subject = request.Subject;
         lesson.StartTime = request.StartTime.ToUniversalTime();
         lesson.ExpectedDurationInHours = request.ExpectedDurationInHours;
+        lesson.IsInPerson = request.IsInPerson ?? true;
 
         var desiredStudentIds = request.StudentIds.Distinct().ToList();
         var existingParticipants = await _db.LessonParticipants

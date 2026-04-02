@@ -66,6 +66,8 @@ public class StudentService : IStudentService
             Name = request.Name.Trim(),
             PhoneNumber = string.IsNullOrWhiteSpace(request.PhoneNumber) ? null : request.PhoneNumber.Trim(),
             BaseHourlyPrice = request.BaseHourlyPrice,
+            AddressLine = string.IsNullOrWhiteSpace(request.AddressLine) ? null : request.AddressLine.Trim(),
+            LocationNotes = string.IsNullOrWhiteSpace(request.LocationNotes) ? null : request.LocationNotes.Trim(),
             IsActive = true
         };
 
@@ -114,7 +116,9 @@ public class StudentService : IStudentService
                 x.Name,
                 x.PhoneNumber,
                 x.IsActive,
-                x.BaseHourlyPrice
+                x.BaseHourlyPrice,
+                x.AddressLine,
+                x.LocationNotes
             ))
             .ToListAsync(ct);
 
@@ -132,6 +136,8 @@ public class StudentService : IStudentService
         student.Name = request.Name.Trim();
         student.PhoneNumber = string.IsNullOrWhiteSpace(request.PhoneNumber) ? null : request.PhoneNumber.Trim();
         student.BaseHourlyPrice = request.BaseHourlyPrice;
+        student.AddressLine = string.IsNullOrWhiteSpace(request.AddressLine) ? null : request.AddressLine.Trim();
+        student.LocationNotes = string.IsNullOrWhiteSpace(request.LocationNotes) ? null : request.LocationNotes.Trim();
         student.IsActive = request.IsActive;
 
         await _db.SaveChangesAsync(ct);

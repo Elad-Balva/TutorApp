@@ -38,6 +38,8 @@ public class AppDbContext : DbContext, IAppDbContext
             e.HasKey(x => x.Id);
             e.Property(x => x.Name).HasMaxLength(120).IsRequired();
             e.Property(x => x.PhoneNumber).HasMaxLength(30);
+            e.Property(x => x.AddressLine).HasMaxLength(500);
+            e.Property(x => x.LocationNotes).HasMaxLength(300);
             e.Property(x => x.BaseHourlyPrice).HasPrecision(10, 2);
 
             e.HasIndex(x => x.TeacherId);
@@ -57,6 +59,7 @@ public class AppDbContext : DbContext, IAppDbContext
                 .HasPrecision(10, 2)
                 .HasDefaultValue(1.00m)
                 .IsRequired();
+            e.Property(x => x.IsInPerson).HasDefaultValue(true);
 
             e.HasIndex(x => x.TeacherId);
             e.HasQueryFilter(x => x.TeacherId == _currentTeacherService.TeacherId);

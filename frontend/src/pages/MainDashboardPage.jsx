@@ -7,6 +7,7 @@ import {
   Button,
   Card,
   CardContent,
+  Checkbox,
   Chip,
   CircularProgress,
   Collapse,
@@ -15,13 +16,18 @@ import {
   DialogContent,
   DialogTitle,
   Fab,
+  FormControlLabel,
   List,
   TextField,
+  ToggleButton,
+  ToggleButtonGroup,
   Typography,
 } from "@mui/material";
 import { createLesson, getLessonsDashboard, updateLesson } from "../api/lessonsApi";
 import { getStudentOptions } from "../api/studentsApi";
 import { useDebouncedValue } from "../hooks/useDebouncedValue";
+import { LessonCompleteDialog } from "../components/LessonCompleteDialog";
+import { buildWazeUrl } from "../utils/waze";
 
 const SUBJECT_SUGGESTIONS = ["c#", "java", "פרויקט תכנות", "מתמטיקה", "אנגלית", "פיזיקה"];
 
@@ -37,17 +43,21 @@ const toDateTimeLocal = (utcIso) => {
 };
 
 export function MainDashboardPage() {
+  const [dashboardTab, setDashboardTab] = useState("future");
   const [dialogOpen, setDialogOpen] = useState(false);
-  const [dialogMode, setDialogMode] = useState("create"); // create | edit
+  const [dialogMode, setDialogMode] = useState("create");
   const [editingLessonId, setEditingLessonId] = useState(null);
 
   const [subjectInput, setSubjectInput] = useState("");
   const [startTimeInput, setStartTimeInput] = useState("");
   const [expectedDurationInHours, setExpectedDurationInHours] = useState("1");
+  const [isInPerson, setIsInPerson] = useState(true);
   const [participantSearch, setParticipantSearch] = useState("");
-  const [selectedParticipants, setSelectedParticipants] = useState([]); // [{id,name}]
+  const [selectedParticipants, setSelectedParticipants] = useState([]);
 
   const [expandedFutureLessonId, setExpandedFutureLessonId] = useState(null);
+  const [expandedAttentionLessonId, setExpandedAttentionLessonId] = useState(null);
+  const [completeDialogLesson, setCompleteDialogLesson] = useState(null);
 
   const queryClient = useQueryClient();
 
@@ -70,6 +80,9 @@ export function MainDashboardPage() {
     return Array.from(map.values()).sort((a, b) => a.name.localeCompare(b.name, "he"));
   }, [selectedParticipants, studentOptionsQuery.data]);
 
+  const awaitingList = dashboardQuery.data?.awaitingCompletionLessons ?? [];
+  const unpaidList = dashboardQuery.data?.unpaidLessons ?? [];
+
   const createLessonMutation = useMutation({
     mutationFn: createLesson,
     onSuccess: () => {
@@ -77,6 +90,7 @@ export function MainDashboardPage() {
       setSubjectInput("");
       setStartTimeInput("");
       setExpectedDurationInHours("1");
+      setIsInPerson(true);
       setParticipantSearch("");
       setSelectedParticipants([]);
       setExpandedFutureLessonId(null);
@@ -113,6 +127,7 @@ export function MainDashboardPage() {
     setSubjectInput("");
     setStartTimeInput(toDateTimeLocal(new Date(Date.now() + 60 * 60 * 1000).toISOString()));
     setExpectedDurationInHours("1");
+    setIsInPerson(true);
     setParticipantSearch("");
     setSelectedParticipants([]);
     setDialogOpen(true);
@@ -124,128 +139,283 @@ export function MainDashboardPage() {
     setSubjectInput(lesson.subject || "");
     setStartTimeInput(toDateTimeLocal(lesson.startTime));
     setExpectedDurationInHours(String(lesson.expectedDurationInHours || 1));
+    setIsInPerson(lesson.isInPerson !== false);
     setParticipantSearch("");
     setSelectedParticipants((lesson.participants || []).map((p) => ({ id: p.studentId, name: p.studentName })));
     setDialogOpen(true);
   };
 
+  const renderParticipantChips = (lesson, { showWaze }) => {
+    const participants = lesson.participants || [];
+    return (
+      <Box sx={{ display: "flex", flexWrap: "wrap", gap: 1, alignItems: "center" }}>
+        {participants.map((p) => {
+          const wazeUrl =
+            showWaze && lesson.isInPerson ? buildWazeUrl(p.addressLine, p.locationNotes) : null;
+          return (
+            <Box key={p.studentId} sx={{ display: "flex", flexWrap: "wrap", gap: 0.5, alignItems: "center" }}>
+              <Chip label={p.studentName} size="small" />
+              {wazeUrl ? (
+                <Button
+                  component="a"
+                  href={wazeUrl}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  size="small"
+                  variant="outlined"
+                  sx={{ minWidth: "auto", py: 0.25, px: 1 }}
+                >
+                  Waze
+                </Button>
+              ) : null}
+              {p.locationNotes && lesson.isInPerson ? (
+                <Typography variant="caption" color="text.secondary" sx={{ width: "100%" }}>
+                  {p.studentName}: {p.locationNotes}
+                </Typography>
+              ) : null}
+            </Box>
+          );
+        })}
+      </Box>
+    );
+  };
+
   return (
-    <Box sx={{ p: 2, pb: 10, display: "grid", gap: 2 }} dir="rtl">
+    <Box sx={{ p: 2, pb: 10, display: "grid", gap: 2 }}>
       <Typography variant="h5" fontWeight={800}>
         לוח בקרה
       </Typography>
 
       {dashboardQuery.error ? <Alert severity="error">{dashboardQuery.error.message}</Alert> : null}
 
-      <Typography variant="h6" fontWeight={700} sx={{ mt: 1 }}>
-        שיעורים עתידיים
-      </Typography>
-      <List disablePadding sx={{ display: "grid", gap: 1 }}>
-        {(dashboardQuery.data?.futureLessons || []).map((lesson) => {
-          const isExpanded = expandedFutureLessonId === lesson.lessonId;
-          return (
-            <Card
-              key={lesson.lessonId}
-              variant="outlined"
-              sx={{
-                cursor: "pointer",
-                transition: "transform 180ms ease, box-shadow 180ms ease",
-                "&:hover": { transform: "translateY(-2px)", boxShadow: 2 },
-              }}
-              onClick={() => setExpandedFutureLessonId((prev) => (prev === lesson.lessonId ? null : lesson.lessonId))}
-            >
-              <CardContent>
-                <Typography variant="subtitle1" fontWeight={800}>
-                  {lesson.subject}
-                </Typography>
-                <Typography variant="body2" color="text.secondary">
-                  {formatDate(lesson.startTime)} | משך צפוי: {lesson.expectedDurationInHours} שעות
-                </Typography>
+      <ToggleButtonGroup
+        exclusive
+        fullWidth
+        value={dashboardTab}
+        onChange={(_, v) => v && setDashboardTab(v)}
+        color="primary"
+        sx={{ "& .MuiToggleButton-root": { py: 1.25 } }}
+      >
+        <ToggleButton value="future">שיעורים עתידיים</ToggleButton>
+        <ToggleButton value="attention">שיעורים שטרם שולמו / ממתינים</ToggleButton>
+      </ToggleButtonGroup>
 
-                <Collapse in={isExpanded} timeout={240} unmountOnExit>
-                  <Box sx={{ mt: 1, display: "grid", gap: 1 }}>
-                    <Typography variant="body2" fontWeight={700}>
-                      תלמידים בשיעור
+      {dashboardTab === "future" ? (
+        <List disablePadding sx={{ display: "grid", gap: 1 }}>
+          {(dashboardQuery.data?.futureLessons || []).map((lesson) => {
+            const isExpanded = expandedFutureLessonId === lesson.lessonId;
+            return (
+              <Card
+                key={lesson.lessonId}
+                variant="outlined"
+                sx={{
+                  cursor: "pointer",
+                  transition: "transform 180ms ease, box-shadow 180ms ease",
+                  "&:hover": { transform: "translateY(-2px)", boxShadow: 2 },
+                }}
+                onClick={() => setExpandedFutureLessonId((prev) => (prev === lesson.lessonId ? null : lesson.lessonId))}
+              >
+                <CardContent>
+                  <Box sx={{ display: "flex", flexWrap: "wrap", gap: 1, alignItems: "center", mb: 0.5 }}>
+                    <Typography variant="subtitle1" fontWeight={800}>
+                      {lesson.subject}
                     </Typography>
-                    <Box sx={{ display: "flex", flexWrap: "wrap", gap: 1 }}>
-                      {(lesson.participants || []).map((p) => (
-                        <Chip key={p.studentId} label={p.studentName} size="small" sx={{ direction: "rtl" }} />
-                      ))}
-                    </Box>
+                    {lesson.isInPerson ? (
+                      <Chip size="small" label="פרונטלי" variant="outlined" />
+                    ) : (
+                      <Chip size="small" label="מקוון" variant="outlined" />
+                    )}
+                  </Box>
+                  <Typography variant="body2" color="text.secondary">
+                    {formatDate(lesson.startTime)} | משך צפוי: {lesson.expectedDurationInHours} שעות
+                  </Typography>
 
-                    <Button
-                      variant="contained"
-                      size="small"
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        openEditDialog(lesson);
-                      }}
-                    >
+                  <Collapse in={isExpanded} timeout={240} unmountOnExit>
+                    <Box sx={{ mt: 1, display: "grid", gap: 1 }}>
+                      <Typography variant="body2" fontWeight={700}>
+                        תלמידים בשיעור
+                      </Typography>
+                      {renderParticipantChips(lesson, { showWaze: true })}
+
+                      <Box sx={{ display: "flex", flexWrap: "wrap", gap: 1 }}>
+                        <Button
+                          variant="contained"
+                          size="small"
+                          color="secondary"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            setCompleteDialogLesson(lesson);
+                          }}
+                        >
+                          סיים שיעור
+                        </Button>
+                        <Button
+                          variant="outlined"
+                          size="small"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            openEditDialog(lesson);
+                          }}
+                        >
+                          ערוך
+                        </Button>
+                      </Box>
+                    </Box>
+                  </Collapse>
+                </CardContent>
+              </Card>
+            );
+          })}
+
+          {!dashboardQuery.isLoading && (dashboardQuery.data?.futureLessons || []).length === 0 ? (
+            <Typography variant="body2" color="text.secondary">
+              אין שיעורים עתידיים (לפי מועד ומשך צפוי)
+            </Typography>
+          ) : null}
+        </List>
+      ) : (
+        <List disablePadding sx={{ display: "grid", gap: 1.5 }}>
+          {awaitingList.length > 0 ? (
+            <Typography variant="subtitle2" color="text.secondary">
+              ממתינים לסיום (הזמן הצפוי של השיעור עבר)
+            </Typography>
+          ) : null}
+          {awaitingList.map((lesson) => {
+            const isExpanded = expandedAttentionLessonId === `a-${lesson.lessonId}`;
+            return (
+              <Card
+                key={`a-${lesson.lessonId}`}
+                variant="outlined"
+                sx={{ borderColor: "warning.main", borderWidth: 1 }}
+              >
+                <CardContent
+                  onClick={() =>
+                    setExpandedAttentionLessonId((prev) => (prev === `a-${lesson.lessonId}` ? null : `a-${lesson.lessonId}`))
+                  }
+                  sx={{ cursor: "pointer" }}
+                >
+                  <Box sx={{ display: "flex", flexWrap: "wrap", gap: 1, alignItems: "center" }}>
+                    <Chip size="small" color="warning" label="לסיום" />
+                    <Typography variant="subtitle1" fontWeight={800}>
+                      {lesson.subject}
+                    </Typography>
+                  </Box>
+                  <Typography variant="body2" color="text.secondary">
+                    {formatDate(lesson.startTime)} | משך צפוי: {lesson.expectedDurationInHours} שעות
+                  </Typography>
+                  <Box sx={{ display: "flex", flexWrap: "wrap", gap: 1, mt: 1 }} onClick={(e) => e.stopPropagation()}>
+                    <Button variant="contained" size="small" onClick={() => setCompleteDialogLesson(lesson)}>
+                      סיים שיעור
+                    </Button>
+                    <Button variant="outlined" size="small" onClick={() => openEditDialog(lesson)}>
                       ערוך
                     </Button>
                   </Box>
-                </Collapse>
-              </CardContent>
-            </Card>
-          );
-        })}
-
-        {!dashboardQuery.isLoading && (dashboardQuery.data?.futureLessons || []).length === 0 ? (
-          <Typography variant="body2" color="text.secondary">
-            אין שיעורים עתידיים
-          </Typography>
-        ) : null}
-      </List>
-
-      <Typography variant="h6" fontWeight={700} sx={{ mt: 2 }}>
-        שיעורים שטרם שולמו
-      </Typography>
-      <List disablePadding sx={{ display: "grid", gap: 1 }}>
-        {(dashboardQuery.data?.unpaidLessons || []).map((lesson) => {
-          const unpaidParticipants = (lesson.participants || []).filter((p) => !p.isPaid && p.outstandingAmount > 0);
-          return (
-            <Card key={lesson.lessonId} variant="outlined">
-              <CardContent sx={{ animation: "fadeInUp 260ms ease both" }}>
-                <Typography variant="subtitle1" fontWeight={800}>
-                  {lesson.subject}
-                </Typography>
-                <Typography variant="body2" color="text.secondary">
-                  {formatDate(lesson.startTime)} | יתרה: {formatIls(lesson.outstandingTotal)}
-                </Typography>
-
-                <Box sx={{ mt: 1 }}>
-                  <Typography variant="body2" fontWeight={700}>
-                    תלמידים שלא שילמו
-                  </Typography>
-                  {unpaidParticipants.length === 0 ? (
-                    <Typography variant="body2" color="text.secondary">
-                      הכל שולם
-                    </Typography>
-                  ) : (
-                    <Box sx={{ display: "grid", gap: 0.5, mt: 0.5 }}>
-                      {unpaidParticipants.map((p) => (
-                        <Typography key={p.studentId} variant="body2">
-                          {p.studentName}: {formatIls(p.outstandingAmount)}
-                        </Typography>
-                      ))}
+                  <Collapse in={isExpanded} timeout={240} unmountOnExit>
+                    <Box sx={{ mt: 1, display: "grid", gap: 1 }}>
+                      <Typography variant="body2" fontWeight={700}>
+                        תלמידים
+                      </Typography>
+                      {renderParticipantChips(lesson, { showWaze: true })}
                     </Box>
-                  )}
-                </Box>
-              </CardContent>
-            </Card>
-          );
-        })}
+                  </Collapse>
+                </CardContent>
+              </Card>
+            );
+          })}
 
-        {!dashboardQuery.isLoading && (dashboardQuery.data?.unpaidLessons || []).length === 0 ? (
-          <Typography variant="body2" color="text.secondary">
-            אין יתרות לתשלום
-          </Typography>
-        ) : null}
-      </List>
+          {unpaidList.length > 0 ? (
+            <Typography variant="subtitle2" color="text.secondary" sx={{ mt: 1 }}>
+              שיעורים שבוצעו — יתרה לתשלום
+            </Typography>
+          ) : null}
+          {unpaidList.map((lesson) => {
+            const unpaidParticipants = (lesson.participants || []).filter((p) => !p.isPaid && p.outstandingAmount > 0);
+            return (
+              <Card key={lesson.lessonId} variant="outlined">
+                <CardContent sx={{ animation: "fadeInUp 260ms ease both" }}>
+                  <Box sx={{ display: "flex", flexWrap: "wrap", gap: 1, alignItems: "center" }}>
+                    <Chip size="small" color="error" label="יתרה" />
+                    <Typography variant="subtitle1" fontWeight={800}>
+                      {lesson.subject}
+                    </Typography>
+                  </Box>
+                  <Typography variant="body2" color="text.secondary">
+                    {formatDate(lesson.startTime)} | יתרה: {formatIls(lesson.outstandingTotal)}
+                  </Typography>
 
-      <Fab color="primary" aria-label="add lesson" onClick={openCreateDialog} sx={{ position: "fixed", right: 16, bottom: 16 }}>
+                  <Box sx={{ mt: 1 }}>
+                    <Typography variant="body2" fontWeight={700}>
+                      תלמידים שלא שילמו
+                    </Typography>
+                    {lesson.isInPerson ? (
+                      <Typography variant="caption" color="text.secondary" display="block">
+                        ניווט (Waze) לפי כתובת שנשמרה אצל התלמיד
+                      </Typography>
+                    ) : null}
+                    {unpaidParticipants.length === 0 ? (
+                      <Typography variant="body2" color="text.secondary">
+                        הכל שולם
+                      </Typography>
+                    ) : (
+                      <Box sx={{ display: "grid", gap: 0.75, mt: 0.5 }}>
+                        {unpaidParticipants.map((p) => {
+                          const wazeUrl = lesson.isInPerson ? buildWazeUrl(p.addressLine, p.locationNotes) : null;
+                          return (
+                            <Box key={p.studentId} sx={{ display: "flex", flexWrap: "wrap", gap: 1, alignItems: "center" }}>
+                              <Typography variant="body2">
+                                {p.studentName}: {formatIls(p.outstandingAmount)}
+                              </Typography>
+                              {wazeUrl ? (
+                                <Button
+                                  component="a"
+                                  href={wazeUrl}
+                                  target="_blank"
+                                  rel="noopener noreferrer"
+                                  size="small"
+                                  variant="text"
+                                >
+                                  Waze
+                                </Button>
+                              ) : null}
+                              {p.locationNotes && lesson.isInPerson ? (
+                                <Typography variant="caption" color="text.secondary" sx={{ width: "100%" }}>
+                                  {p.locationNotes}
+                                </Typography>
+                              ) : null}
+                            </Box>
+                          );
+                        })}
+                      </Box>
+                    )}
+                  </Box>
+                </CardContent>
+              </Card>
+            );
+          })}
+
+          {!dashboardQuery.isLoading && awaitingList.length === 0 && unpaidList.length === 0 ? (
+            <Typography variant="body2" color="text.secondary">
+              אין פריטים בקטגוריה זו
+            </Typography>
+          ) : null}
+        </List>
+      )}
+
+      <Fab
+        color="primary"
+        aria-label="add lesson"
+        onClick={openCreateDialog}
+        sx={{ position: "fixed", bottom: 16, left: 16 }}
+      >
         +
       </Fab>
+
+      <LessonCompleteDialog
+        open={Boolean(completeDialogLesson)}
+        lesson={completeDialogLesson}
+        onClose={() => setCompleteDialogLesson(null)}
+      />
 
       <Dialog open={dialogOpen} onClose={() => setDialogOpen(false)} fullWidth maxWidth="sm">
         <DialogTitle>{dialogMode === "create" ? "הוספת שיעור" : "עריכת שיעור"}</DialogTitle>
@@ -272,6 +442,11 @@ export function MainDashboardPage() {
             value={expectedDurationInHours}
             onChange={(e) => setExpectedDurationInHours(e.target.value)}
             inputProps={{ min: 0.01, max: 24, step: 0.25 }}
+          />
+
+          <FormControlLabel
+            control={<Checkbox checked={isInPerson} onChange={(e) => setIsInPerson(e.target.checked)} />}
+            label="שיעור פרונטלי (הצגת ניווט Waze לפי כתובת תלמידים)"
           />
 
           <Autocomplete
@@ -317,6 +492,7 @@ export function MainDashboardPage() {
                 startTime: new Date(startTimeInput).toISOString(),
                 expectedDurationInHours: Number(expectedDurationInHours),
                 studentIds: selectedParticipants.map((s) => s.id),
+                isInPerson,
               };
 
               if (dialogMode === "create") {

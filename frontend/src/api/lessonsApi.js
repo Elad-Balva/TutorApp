@@ -19,21 +19,24 @@ export const createLesson = async ({
   subject,
   expectedDurationInHours,
   studentIds,
+  isInPerson,
 }) => {
   const response = await axiosClient.post("/api/lessons", {
     startTime,
     subject,
     expectedDurationInHours,
     studentIds,
+    isInPerson,
   });
   return response.data;
 };
 
-export const updateLesson = async (lessonId, { startTime, subject, expectedDurationInHours, studentIds }) => {
+export const updateLesson = async (lessonId, { startTime, subject, expectedDurationInHours, studentIds, isInPerson }) => {
   await axiosClient.put(`/api/lessons/${lessonId}`, {
     startTime,
     subject,
     expectedDurationInHours,
     studentIds,
+    isInPerson,
   });
 };

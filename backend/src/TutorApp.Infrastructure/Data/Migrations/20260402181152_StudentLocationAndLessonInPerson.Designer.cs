@@ -9,11 +9,11 @@ using TutorApp.Infrastructure.Data;
 
 #nullable disable
 
-namespace TutorApp.Infrastructure.backend.src.TutorApp.Infrastructure.Data.Migrations
+namespace TutorApp.Infrastructure.Data.Migrations
 {
     [DbContext(typeof(AppDbContext))]
-    [Migration("20260402172118_AddExpectedDurationToLessons")]
-    partial class AddExpectedDurationToLessons
+    [Migration("20260402181152_StudentLocationAndLessonInPerson")]
+    partial class StudentLocationAndLessonInPerson
     {
         /// <inheritdoc />
         protected override void BuildTargetModel(ModelBuilder modelBuilder)
@@ -36,6 +36,11 @@ namespace TutorApp.Infrastructure.backend.src.TutorApp.Infrastructure.Data.Migra
                         .HasPrecision(10, 2)
                         .HasColumnType("numeric(10,2)")
                         .HasDefaultValue(1.00m);
+
+                    b.Property<bool>("IsInPerson")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("boolean")
+                        .HasDefaultValue(true);
 
                     b.Property<DateTimeOffset>("StartTime")
                         .HasColumnType("timestamp with time zone");
@@ -131,12 +136,20 @@ namespace TutorApp.Infrastructure.backend.src.TutorApp.Infrastructure.Data.Migra
                         .ValueGeneratedOnAdd()
                         .HasColumnType("uuid");
 
+                    b.Property<string>("AddressLine")
+                        .HasMaxLength(500)
+                        .HasColumnType("character varying(500)");
+
                     b.Property<decimal>("BaseHourlyPrice")
                         .HasPrecision(10, 2)
                         .HasColumnType("numeric(10,2)");
 
                     b.Property<bool>("IsActive")
                         .HasColumnType("boolean");
+
+                    b.Property<string>("LocationNotes")
+                        .HasMaxLength(300)
+                        .HasColumnType("character varying(300)");
 
                     b.Property<string>("Name")
                         .IsRequired()

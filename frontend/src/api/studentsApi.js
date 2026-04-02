@@ -12,11 +12,13 @@ export const getStudentOptions = async (search) => {
   return response.data;
 };
 
-export const createStudent = async ({ name, phoneNumber, baseHourlyPrice }) => {
+export const createStudent = async ({ name, phoneNumber, baseHourlyPrice, addressLine, locationNotes }) => {
   const response = await axiosClient.post("/api/students", {
     name,
     phoneNumber,
     baseHourlyPrice,
+    addressLine: addressLine?.trim() || null,
+    locationNotes: locationNotes?.trim() || null,
   });
   return response.data;
 };
@@ -28,11 +30,13 @@ export const getStudents = async ({ search, page = 1, pageSize = 20 }) => {
   return response.data;
 };
 
-export const updateStudent = async (studentId, { name, phoneNumber, baseHourlyPrice, isActive }) => {
+export const updateStudent = async (studentId, { name, phoneNumber, baseHourlyPrice, addressLine, locationNotes, isActive }) => {
   await axiosClient.put(`/api/students/${studentId}`, {
     name,
     phoneNumber,
     baseHourlyPrice,
+    addressLine: addressLine?.trim() || null,
+    locationNotes: locationNotes?.trim() || null,
     isActive,
   });
 };

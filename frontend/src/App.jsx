@@ -13,7 +13,6 @@ import {
   Typography,
 } from "@mui/material";
 import { MainDashboardPage } from "./pages/MainDashboardPage";
-import { LessonCompletionPage } from "./pages/LessonCompletionPage";
 import { StudentsPage } from "./pages/StudentsPage";
 import "./App.css";
 
@@ -27,15 +26,17 @@ function App() {
     <QueryClientProvider client={queryClient}>
       <CssBaseline />
       <AppBar position="sticky">
-        <Toolbar>
-          <IconButton color="inherit" onClick={() => setOpenMenu(true)} sx={{ mr: 1 }}>
+        <Toolbar sx={{ justifyContent: "space-between", gap: 1 }}>
+          <Typography variant="h6" component="div" sx={{ flexGrow: 1 }}>
+            TutorApp
+          </Typography>
+          <IconButton color="inherit" edge="end" onClick={() => setOpenMenu(true)} aria-label="תפריט">
             ☰
           </IconButton>
-          <Typography variant="h6">TutorApp</Typography>
         </Toolbar>
       </AppBar>
 
-      <Drawer open={openMenu} onClose={() => setOpenMenu(false)}>
+      <Drawer anchor="right" open={openMenu} onClose={() => setOpenMenu(false)}>
         <Box sx={{ width: 260, pt: 2 }}>
           <List>
             <ListItemButton
@@ -46,15 +47,6 @@ function App() {
               }}
             >
               <ListItemText primary="לוח בקרה" />
-            </ListItemButton>
-            <ListItemButton
-              selected={activePage === "completeLesson"}
-              onClick={() => {
-                setActivePage("completeLesson");
-                setOpenMenu(false);
-              }}
-            >
-              <ListItemText primary="סיום שיעור" />
             </ListItemButton>
             <ListItemButton
               selected={activePage === "students"}
@@ -69,14 +61,8 @@ function App() {
         </Box>
       </Drawer>
 
-      <Box dir="rtl">
-        {activePage === "dashboard" ? (
-          <MainDashboardPage />
-        ) : activePage === "students" ? (
-          <StudentsPage />
-        ) : (
-          <LessonCompletionPage />
-        )}
+      <Box component="main" sx={{ textAlign: "start" }}>
+        {activePage === "dashboard" ? <MainDashboardPage /> : <StudentsPage />}
       </Box>
     </QueryClientProvider>
   );
