@@ -164,6 +164,7 @@ public static class DemoDataSeeder
                     Id = Guid.Parse("a1111111-1111-1111-1111-111111111111"),
                     TeacherId = TeacherId,
                     StudentId = s1,
+                    LessonId = done1,
                     Amount = 100m,
                     PaymentDate = now.AddDays(-9),
                     PaymentMethod = "מזומן"
@@ -173,6 +174,7 @@ public static class DemoDataSeeder
                     Id = Guid.Parse("b2222222-2222-2222-2222-222222222222"),
                     TeacherId = TeacherId,
                     StudentId = s3,
+                    LessonId = done2,
                     Amount = 50m,
                     PaymentDate = now.AddDays(-4),
                     PaymentMethod = "העברה"

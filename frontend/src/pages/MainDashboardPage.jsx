@@ -23,7 +23,12 @@ import {
   ToggleButtonGroup,
   Typography,
 } from "@mui/material";
-import { createLesson, getLessonsDashboard, updateLesson } from "../api/lessonsApi";
+import {
+  createLesson,
+  getLessonsDashboard,
+  markLessonParticipantPaid,
+  updateLesson,
+} from "../api/lessonsApi";
 import { getStudentOptions } from "../api/studentsApi";
 import { useDebouncedValue } from "../hooks/useDebouncedValue";
 import { LessonCompleteDialog } from "../components/LessonCompleteDialog";
@@ -42,11 +47,20 @@ const toDateTimeLocal = (utcIso) => {
   return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
 };
 
+const participantNamesLine = (lesson) =>
+  (lesson.participants || []).map((p) => p.studentName).join(" · ") || "—";
+
+const unpaidNamesLine = (lesson) => {
+  const unpaid = (lesson.participants || []).filter((p) => !p.isPaid && p.outstandingAmount > 0);
+  return unpaid.map((p) => p.studentName).join(" · ") || "—";
+};
+
 export function MainDashboardPage() {
   const [dashboardTab, setDashboardTab] = useState("future");
   const [dialogOpen, setDialogOpen] = useState(false);
   const [dialogMode, setDialogMode] = useState("create");
   const [editingLessonId, setEditingLessonId] = useState(null);
+  const [formError, setFormError] = useState(null);
 
   const [subjectInput, setSubjectInput] = useState("");
   const [startTimeInput, setStartTimeInput] = useState("");
@@ -86,6 +100,7 @@ export function MainDashboardPage() {
   const createLessonMutation = useMutation({
     mutationFn: createLesson,
     onSuccess: () => {
+      setFormError(null);
       setDialogOpen(false);
       setSubjectInput("");
       setStartTimeInput("");
@@ -96,17 +111,29 @@ export function MainDashboardPage() {
       setExpandedFutureLessonId(null);
       queryClient.invalidateQueries({ queryKey: ["lessonsDashboard"] });
     },
+    onError: (err) => setFormError(err?.message || "שגיאה ביצירת השיעור"),
   });
 
   const updateLessonMutation = useMutation({
     mutationFn: ({ lessonId, payload }) => updateLesson(lessonId, payload),
     onSuccess: () => {
+      setFormError(null);
       setDialogOpen(false);
       setEditingLessonId(null);
       setExpandedFutureLessonId(null);
       queryClient.invalidateQueries({ queryKey: ["lessonsDashboard"] });
       queryClient.invalidateQueries({ queryKey: ["readyToCompleteLessons"] });
     },
+    onError: (err) => setFormError(err?.message || "שגיאה בשמירה"),
+  });
+
+  const markPaidMutation = useMutation({
+    mutationFn: ({ lessonId, studentId }) => markLessonParticipantPaid(lessonId, studentId),
+    onSuccess: () => {
+      setFormError(null);
+      queryClient.invalidateQueries({ queryKey: ["lessonsDashboard"] });
+    },
+    onError: (err) => setFormError(err?.message || "שגיאה בסימון תשלום"),
   });
 
   const canSubmit = useMemo(() => {
@@ -122,6 +149,7 @@ export function MainDashboardPage() {
   }, [subjectInput, startTimeInput, selectedParticipants, expectedDurationInHours]);
 
   const openCreateDialog = () => {
+    setFormError(null);
     setDialogMode("create");
     setEditingLessonId(null);
     setSubjectInput("");
@@ -134,6 +162,7 @@ export function MainDashboardPage() {
   };
 
   const openEditDialog = (lesson) => {
+    setFormError(null);
     setDialogMode("edit");
     setEditingLessonId(lesson.lessonId);
     setSubjectInput(lesson.subject || "");
@@ -145,13 +174,20 @@ export function MainDashboardPage() {
     setDialogOpen(true);
   };
 
-  const renderParticipantChips = (lesson, { showWaze }) => {
+  const renderModeChip = (lesson) =>
+    lesson.isInPerson ? (
+      <Chip size="small" label="פרונטלי" variant="outlined" />
+    ) : (
+      <Chip size="small" label="רשתי" variant="outlined" />
+    );
+
+  const renderParticipantChipsWithWaze = (lesson) => {
     const participants = lesson.participants || [];
     return (
       <Box sx={{ display: "flex", flexWrap: "wrap", gap: 1, alignItems: "center" }}>
         {participants.map((p) => {
           const wazeUrl =
-            showWaze && lesson.isInPerson ? buildWazeUrl(p.addressLine, p.locationNotes) : null;
+            lesson.isInPerson ? buildWazeUrl(p.addressLine, p.locationNotes) : null;
           return (
             <Box key={p.studentId} sx={{ display: "flex", flexWrap: "wrap", gap: 0.5, alignItems: "center" }}>
               <Chip label={p.studentName} size="small" />
@@ -187,6 +223,7 @@ export function MainDashboardPage() {
       </Typography>
 
       {dashboardQuery.error ? <Alert severity="error">{dashboardQuery.error.message}</Alert> : null}
+      {formError && !dialogOpen ? <Alert severity="error">{formError}</Alert> : null}
 
       <ToggleButtonGroup
         exclusive
@@ -197,7 +234,7 @@ export function MainDashboardPage() {
         sx={{ "& .MuiToggleButton-root": { py: 1.25 } }}
       >
         <ToggleButton value="future">שיעורים עתידיים</ToggleButton>
-        <ToggleButton value="attention">שיעורים שטרם שולמו / ממתינים</ToggleButton>
+        <ToggleButton value="attention">טרם שולמו</ToggleButton>
       </ToggleButtonGroup>
 
       {dashboardTab === "future" ? (
@@ -216,26 +253,27 @@ export function MainDashboardPage() {
                 onClick={() => setExpandedFutureLessonId((prev) => (prev === lesson.lessonId ? null : lesson.lessonId))}
               >
                 <CardContent>
+                  <Typography variant="subtitle1" fontWeight={800} sx={{ mb: 0.5 }}>
+                    {participantNamesLine(lesson)}
+                  </Typography>
                   <Box sx={{ display: "flex", flexWrap: "wrap", gap: 1, alignItems: "center", mb: 0.5 }}>
-                    <Typography variant="subtitle1" fontWeight={800}>
-                      {lesson.subject}
-                    </Typography>
-                    {lesson.isInPerson ? (
-                      <Chip size="small" label="פרונטלי" variant="outlined" />
-                    ) : (
-                      <Chip size="small" label="מקוון" variant="outlined" />
-                    )}
+                    {renderModeChip(lesson)}
                   </Box>
                   <Typography variant="body2" color="text.secondary">
                     {formatDate(lesson.startTime)} | משך צפוי: {lesson.expectedDurationInHours} שעות
                   </Typography>
+                  {lesson.subject ? (
+                    <Typography variant="body2" color="text.secondary" sx={{ mt: 0.5 }}>
+                      נושא: {lesson.subject}
+                    </Typography>
+                  ) : null}
 
                   <Collapse in={isExpanded} timeout={240} unmountOnExit>
                     <Box sx={{ mt: 1, display: "grid", gap: 1 }}>
                       <Typography variant="body2" fontWeight={700}>
-                        תלמידים בשיעור
+                        פרטים
                       </Typography>
-                      {renderParticipantChips(lesson, { showWaze: true })}
+                      {renderParticipantChipsWithWaze(lesson)}
 
                       <Box sx={{ display: "flex", flexWrap: "wrap", gap: 1 }}>
                         <Button
@@ -274,10 +312,10 @@ export function MainDashboardPage() {
           ) : null}
         </List>
       ) : (
-        <List disablePadding sx={{ display: "grid", gap: 1.5 }}>
+        <List disablePadding sx={{ display: "grid", gap: 1 }}>
           {awaitingList.length > 0 ? (
             <Typography variant="subtitle2" color="text.secondary">
-              ממתינים לסיום (הזמן הצפוי של השיעור עבר)
+              ממתינים לסיום
             </Typography>
           ) : null}
           {awaitingList.map((lesson) => {
@@ -286,23 +324,34 @@ export function MainDashboardPage() {
               <Card
                 key={`a-${lesson.lessonId}`}
                 variant="outlined"
-                sx={{ borderColor: "warning.main", borderWidth: 1 }}
+                sx={{
+                  borderColor: "warning.main",
+                  borderWidth: 1,
+                  cursor: "pointer",
+                  transition: "transform 180ms ease, box-shadow 180ms ease",
+                  "&:hover": { transform: "translateY(-2px)", boxShadow: 2 },
+                }}
+                onClick={() =>
+                  setExpandedAttentionLessonId((prev) => (prev === `a-${lesson.lessonId}` ? null : `a-${lesson.lessonId}`))
+                }
               >
-                <CardContent
-                  onClick={() =>
-                    setExpandedAttentionLessonId((prev) => (prev === `a-${lesson.lessonId}` ? null : `a-${lesson.lessonId}`))
-                  }
-                  sx={{ cursor: "pointer" }}
-                >
-                  <Box sx={{ display: "flex", flexWrap: "wrap", gap: 1, alignItems: "center" }}>
+                <CardContent>
+                  <Typography variant="subtitle1" fontWeight={800} sx={{ mb: 0.5 }}>
+                    {participantNamesLine(lesson)}
+                  </Typography>
+                  <Box sx={{ display: "flex", flexWrap: "wrap", gap: 1, mb: 0.5 }}>
                     <Chip size="small" color="warning" label="לסיום" />
-                    <Typography variant="subtitle1" fontWeight={800}>
-                      {lesson.subject}
-                    </Typography>
+                    {renderModeChip(lesson)}
                   </Box>
                   <Typography variant="body2" color="text.secondary">
                     {formatDate(lesson.startTime)} | משך צפוי: {lesson.expectedDurationInHours} שעות
                   </Typography>
+                  {lesson.subject ? (
+                    <Typography variant="body2" color="text.secondary" sx={{ mt: 0.5 }}>
+                      נושא: {lesson.subject}
+                    </Typography>
+                  ) : null}
+
                   <Box sx={{ display: "flex", flexWrap: "wrap", gap: 1, mt: 1 }} onClick={(e) => e.stopPropagation()}>
                     <Button variant="contained" size="small" onClick={() => setCompleteDialogLesson(lesson)}>
                       סיים שיעור
@@ -313,10 +362,7 @@ export function MainDashboardPage() {
                   </Box>
                   <Collapse in={isExpanded} timeout={240} unmountOnExit>
                     <Box sx={{ mt: 1, display: "grid", gap: 1 }}>
-                      <Typography variant="body2" fontWeight={700}>
-                        תלמידים
-                      </Typography>
-                      {renderParticipantChips(lesson, { showWaze: true })}
+                      {renderParticipantChipsWithWaze(lesson)}
                     </Box>
                   </Collapse>
                 </CardContent>
@@ -325,69 +371,64 @@ export function MainDashboardPage() {
           })}
 
           {unpaidList.length > 0 ? (
-            <Typography variant="subtitle2" color="text.secondary" sx={{ mt: 1 }}>
-              שיעורים שבוצעו — יתרה לתשלום
+            <Typography variant="subtitle2" color="text.secondary" sx={{ mt: awaitingList.length ? 2 : 0 }}>
+              יתרה לתשלום
             </Typography>
           ) : null}
           {unpaidList.map((lesson) => {
             const unpaidParticipants = (lesson.participants || []).filter((p) => !p.isPaid && p.outstandingAmount > 0);
             return (
-              <Card key={lesson.lessonId} variant="outlined">
+              <Card
+                key={lesson.lessonId}
+                variant="outlined"
+                sx={{
+                  transition: "transform 180ms ease, box-shadow 180ms ease",
+                  "&:hover": { transform: "translateY(-2px)", boxShadow: 2 },
+                }}
+              >
                 <CardContent sx={{ animation: "fadeInUp 260ms ease both" }}>
-                  <Box sx={{ display: "flex", flexWrap: "wrap", gap: 1, alignItems: "center" }}>
-                    <Chip size="small" color="error" label="יתרה" />
-                    <Typography variant="subtitle1" fontWeight={800}>
-                      {lesson.subject}
-                    </Typography>
+                  <Typography variant="subtitle1" fontWeight={800} sx={{ mb: 0.5 }}>
+                    {unpaidNamesLine(lesson)}
+                  </Typography>
+                  <Box sx={{ display: "flex", flexWrap: "wrap", gap: 1, mb: 0.5 }}>
+                    <Chip size="small" color="error" label="לא שולם" variant="outlined" />
+                    {renderModeChip(lesson)}
                   </Box>
                   <Typography variant="body2" color="text.secondary">
-                    {formatDate(lesson.startTime)} | יתרה: {formatIls(lesson.outstandingTotal)}
+                    {formatDate(lesson.startTime)}
                   </Typography>
-
-                  <Box sx={{ mt: 1 }}>
-                    <Typography variant="body2" fontWeight={700}>
-                      תלמידים שלא שילמו
+                  {lesson.subject ? (
+                    <Typography variant="body2" color="text.secondary" sx={{ mt: 0.5 }}>
+                      נושא: {lesson.subject}
                     </Typography>
-                    {lesson.isInPerson ? (
-                      <Typography variant="caption" color="text.secondary" display="block">
-                        ניווט (Waze) לפי כתובת שנשמרה אצל התלמיד
-                      </Typography>
-                    ) : null}
-                    {unpaidParticipants.length === 0 ? (
-                      <Typography variant="body2" color="text.secondary">
-                        הכל שולם
-                      </Typography>
-                    ) : (
-                      <Box sx={{ display: "grid", gap: 0.75, mt: 0.5 }}>
-                        {unpaidParticipants.map((p) => {
-                          const wazeUrl = lesson.isInPerson ? buildWazeUrl(p.addressLine, p.locationNotes) : null;
-                          return (
-                            <Box key={p.studentId} sx={{ display: "flex", flexWrap: "wrap", gap: 1, alignItems: "center" }}>
-                              <Typography variant="body2">
-                                {p.studentName}: {formatIls(p.outstandingAmount)}
-                              </Typography>
-                              {wazeUrl ? (
-                                <Button
-                                  component="a"
-                                  href={wazeUrl}
-                                  target="_blank"
-                                  rel="noopener noreferrer"
-                                  size="small"
-                                  variant="text"
-                                >
-                                  Waze
-                                </Button>
-                              ) : null}
-                              {p.locationNotes && lesson.isInPerson ? (
-                                <Typography variant="caption" color="text.secondary" sx={{ width: "100%" }}>
-                                  {p.locationNotes}
-                                </Typography>
-                              ) : null}
-                            </Box>
-                          );
-                        })}
+                  ) : null}
+
+                  <Box sx={{ mt: 1.5, display: "grid", gap: 1 }}>
+                    {unpaidParticipants.map((p) => (
+                      <Box
+                        key={p.studentId}
+                        sx={{
+                          display: "flex",
+                          flexWrap: "wrap",
+                          gap: 1,
+                          alignItems: "center",
+                          justifyContent: "space-between",
+                        }}
+                      >
+                        <Typography variant="body2">
+                          {p.studentName} — {formatIls(p.outstandingAmount)}
+                        </Typography>
+                        <Button
+                          variant="contained"
+                          size="small"
+                          color="success"
+                          disabled={markPaidMutation.isPending}
+                          onClick={() => markPaidMutation.mutate({ lessonId: lesson.lessonId, studentId: p.studentId })}
+                        >
+                          שולם
+                        </Button>
                       </Box>
-                    )}
+                    ))}
                   </Box>
                 </CardContent>
               </Card>
@@ -406,7 +447,7 @@ export function MainDashboardPage() {
         color="primary"
         aria-label="add lesson"
         onClick={openCreateDialog}
-        sx={{ position: "fixed", bottom: 16, left: 16 }}
+        sx={{ position: "fixed", bottom: 16, right: 16 }}
       >
         +
       </Fab>
@@ -420,12 +461,56 @@ export function MainDashboardPage() {
       <Dialog open={dialogOpen} onClose={() => setDialogOpen(false)} fullWidth maxWidth="sm">
         <DialogTitle>{dialogMode === "create" ? "הוספת שיעור" : "עריכת שיעור"}</DialogTitle>
         <DialogContent sx={{ display: "grid", gap: 2, pt: "12px !important" }}>
+          {formError && dialogOpen ? <Alert severity="error">{formError}</Alert> : null}
+
+          <Autocomplete
+            multiple
+            disableCloseOnSelect
+            filterSelectedOptions
+            options={mergedParticipantOptions}
+            value={selectedParticipants}
+            onChange={(_, value) => {
+              setSelectedParticipants(value);
+              setParticipantSearch("");
+            }}
+            inputValue={participantSearch}
+            onInputChange={(_, value, reason) => {
+              if (reason === "input" || reason === "clear") setParticipantSearch(value);
+            }}
+            getOptionLabel={(option) => option.name}
+            isOptionEqualToValue={(a, b) => a.id === b.id}
+            filterOptions={(options) => options}
+            loading={studentOptionsQuery.isFetching}
+            noOptionsText={studentOptionsQuery.isFetching ? "מחפש..." : "אין התאמות — נסו חיפוש אחר"}
+            renderInput={(params) => (
+              <TextField
+                {...params}
+                label="תלמידים (חובה)"
+                placeholder="הקלידו לחיפוש ובחרו מהרשימה"
+                helperText="בחרו תלמיד אחד או יותר מהרשימה"
+                InputProps={{
+                  ...params.InputProps,
+                  endAdornment: (
+                    <>
+                      {studentOptionsQuery.isFetching ? <CircularProgress color="inherit" size={20} /> : null}
+                      {params.InputProps.endAdornment}
+                    </>
+                  ),
+                }}
+              />
+            )}
+          />
+
           <Autocomplete
             freeSolo
             options={SUBJECT_SUGGESTIONS}
-            value={subjectInput}
-            onInputChange={(_, value) => setSubjectInput(value || "")}
-            renderInput={(params) => <TextField {...params} label="נושא" inputProps={{ maxLength: 120 }} />}
+            inputValue={subjectInput}
+            onInputChange={(_, value, reason) => {
+              if (reason === "input" || reason === "clear" || reason === "reset") setSubjectInput(value ?? "");
+            }}
+            renderInput={(params) => (
+              <TextField {...params} label="נושא" inputProps={{ ...params.inputProps, maxLength: 120 }} />
+            )}
           />
 
           <TextField
@@ -446,39 +531,7 @@ export function MainDashboardPage() {
 
           <FormControlLabel
             control={<Checkbox checked={isInPerson} onChange={(e) => setIsInPerson(e.target.checked)} />}
-            label="שיעור פרונטלי (הצגת ניווט Waze לפי כתובת תלמידים)"
-          />
-
-          <Autocomplete
-            multiple
-            options={mergedParticipantOptions}
-            value={selectedParticipants}
-            onChange={(_, value) => setSelectedParticipants(value)}
-            inputValue={participantSearch}
-            onInputChange={(_, value, reason) => {
-              if (reason === "input" || reason === "clear") setParticipantSearch(value);
-            }}
-            getOptionLabel={(option) => option.name}
-            isOptionEqualToValue={(a, b) => a.id === b.id}
-            filterOptions={(options) => options}
-            loading={studentOptionsQuery.isFetching}
-            noOptionsText={studentOptionsQuery.isFetching ? "מחפש..." : "אין התאמות"}
-            renderInput={(params) => (
-              <TextField
-                {...params}
-                label="תלמידים"
-                placeholder="חיפוש תלמידים"
-                InputProps={{
-                  ...params.InputProps,
-                  endAdornment: (
-                    <>
-                      {studentOptionsQuery.isFetching ? <CircularProgress color="inherit" size={20} /> : null}
-                      {params.InputProps.endAdornment}
-                    </>
-                  ),
-                }}
-              />
-            )}
+            label="שיעור פרונטלי (ניווט Waze)"
           />
         </DialogContent>
         <DialogActions>
@@ -487,6 +540,7 @@ export function MainDashboardPage() {
             variant="contained"
             disabled={!canSubmit || createLessonMutation.isPending || updateLessonMutation.isPending}
             onClick={() => {
+              setFormError(null);
               const payload = {
                 subject: subjectInput.trim(),
                 startTime: new Date(startTimeInput).toISOString(),

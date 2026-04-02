@@ -27,12 +27,12 @@ function App() {
       <CssBaseline />
       <AppBar position="sticky">
         <Toolbar sx={{ justifyContent: "space-between", gap: 1 }}>
-          <Typography variant="h6" component="div" sx={{ flexGrow: 1 }}>
-            TutorApp
-          </Typography>
-          <IconButton color="inherit" edge="end" onClick={() => setOpenMenu(true)} aria-label="תפריט">
+          <IconButton color="inherit" edge="start" onClick={() => setOpenMenu(true)} aria-label="תפריט">
             ☰
           </IconButton>
+          <Typography variant="h6" component="div" sx={{ flexGrow: 1, textAlign: "end" }}>
+            TutorApp
+          </Typography>
         </Toolbar>
       </AppBar>
 

@@ -46,11 +46,16 @@ export function LessonCompleteDialog({ open, lesson, onClose }) {
       <DialogTitle>סיום שיעור</DialogTitle>
       <DialogContent sx={{ display: "grid", gap: 2, pt: "12px !important" }}>
         <Typography variant="subtitle1" fontWeight={800}>
-          {lesson.subject}
+          {(lesson.participants || []).map((p) => p.studentName).join(" · ") || "—"}
         </Typography>
         <Typography variant="body2" color="text.secondary">
           {formatDate(lesson.startTime)} | משך צפוי: {lesson.expectedDurationInHours} שעות
         </Typography>
+        {lesson.subject ? (
+          <Typography variant="body2" color="text.secondary">
+            נושא: {lesson.subject}
+          </Typography>
+        ) : null}
 
         {rows.map((row, idx) => (
           <ParticipantEditorRow

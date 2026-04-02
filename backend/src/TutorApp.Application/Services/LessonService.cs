@@ -34,7 +34,11 @@ public class LessonService : ILessonService
 
         _db.Lessons.Add(lesson);
 
-        foreach (var studentId in request.StudentIds.Distinct())
+        var studentIds = request.StudentIds.Distinct().ToList();
+        if (studentIds.Count == 0)
+            throw new InvalidOperationException("נדרש לפחות תלמיד אחד");
+
+        foreach (var studentId in studentIds)
         {
             var student = await _db.Students.FirstOrDefaultAsync(x => x.Id == studentId, ct)
                 ?? throw new KeyNotFoundException($"Student {studentId} not found");
@@ -208,9 +212,7 @@ public class LessonService : ILessonService
                     lp.Student.Name,
                     lp.HourlyPrice,
                     lp.DurationInHours,
-                    lp.TotalPrice,
-                    lp.Student.AddressLine,
-                    lp.Student.LocationNotes
+                    lp.TotalPrice
                 })
                 .ToListAsync(ct);
 
@@ -219,12 +221,11 @@ public class LessonService : ILessonService
 
             foreach (var p in participants)
             {
-                // MVP assumption: payments made up to the lesson start cover this lesson.
-                var paid = await _db.Payments
-                    .Where(pay => pay.StudentId == p.StudentId && pay.PaymentDate <= lesson.StartTime)
+                var paidForLesson = await _db.Payments
+                    .Where(pay => pay.StudentId == p.StudentId && pay.LessonId == lesson.Id)
                     .SumAsync(pay => (decimal?)pay.Amount, ct) ?? 0m;
 
-                var outstanding = decimal.Round(Math.Max(0m, p.TotalPrice - paid), 2);
+                var outstanding = decimal.Round(Math.Max(0m, p.TotalPrice - paidForLesson), 2);
                 var isPaid = outstanding <= 0m;
                 unpaidTotal += outstanding;
 
@@ -236,8 +237,8 @@ public class LessonService : ILessonService
                     p.TotalPrice,
                     isPaid,
                     outstanding,
-                    p.AddressLine,
-                    p.LocationNotes
+                    null,
+                    null
                 ));
             }
 
@@ -322,7 +323,10 @@ public class LessonService : ILessonService
         lesson.ExpectedDurationInHours = request.ExpectedDurationInHours;
         lesson.IsInPerson = request.IsInPerson ?? true;
 
-        var desiredStudentIds = request.StudentIds.Distinct().ToList();
+        var desiredStudentIds = request.StudentIds?.Distinct().ToList()
+            ?? throw new InvalidOperationException("StudentIds is required");
+        if (desiredStudentIds.Count == 0)
+            throw new InvalidOperationException("נדרש לפחות תלמיד אחד");
         var existingParticipants = await _db.LessonParticipants
             .Where(lp => lp.LessonId == lessonId)
             .ToListAsync(ct);
@@ -371,5 +375,46 @@ public class LessonService : ILessonService
 
         await _db.SaveChangesAsync(ct);
         _logger.LogInformation("Lesson {LessonId} updated for teacher {TeacherId}", lessonId, _currentTeacher.TeacherId);
+    }
+
+    public async Task MarkLessonParticipantPaidAsync(Guid lessonId, Guid studentId, CancellationToken ct)
+    {
+        var lesson = await _db.Lessons
+            .AsNoTracking()
+            .FirstOrDefaultAsync(x => x.Id == lessonId, ct)
+            ?? throw new KeyNotFoundException("Lesson not found");
+
+        if (lesson.Status != LessonStatus.Completed)
+            throw new InvalidOperationException("ניתן לסמן תשלום רק לשיעור שהושלם");
+
+        var participant = await _db.LessonParticipants
+            .FirstOrDefaultAsync(lp => lp.LessonId == lessonId && lp.StudentId == studentId, ct)
+            ?? throw new KeyNotFoundException("התלמיד לא משתתף בשיעור זה");
+
+        var paidForLesson = await _db.Payments
+            .Where(pay => pay.StudentId == studentId && pay.LessonId == lessonId)
+            .SumAsync(pay => (decimal?)pay.Amount, ct) ?? 0m;
+
+        var outstanding = decimal.Round(Math.Max(0m, participant.TotalPrice - paidForLesson), 2);
+        if (outstanding <= 0m)
+            return;
+
+        _db.Payments.Add(new Payment
+        {
+            TeacherId = _currentTeacher.TeacherId,
+            StudentId = studentId,
+            LessonId = lessonId,
+            Amount = outstanding,
+            PaymentDate = DateTimeOffset.UtcNow,
+            PaymentMethod = "שולם"
+        });
+
+        await _db.SaveChangesAsync(ct);
+        _logger.LogInformation(
+            "Marked lesson {LessonId} paid for student {StudentId}, amount {Amount}",
+            lessonId,
+            studentId,
+            outstanding
+        );
     }
 }

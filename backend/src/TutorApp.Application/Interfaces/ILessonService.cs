@@ -10,4 +10,5 @@ public interface ILessonService
     Task<LessonsDashboardDto> GetDashboardAsync(CancellationToken ct);
     Task<List<LessonReadyToCompleteDto>> GetReadyToCompleteLessonsAsync(CancellationToken ct);
     Task UpdateLessonAsync(Guid lessonId, UpdateLessonRequest request, CancellationToken ct);
+    Task MarkLessonParticipantPaidAsync(Guid lessonId, Guid studentId, CancellationToken ct);
 }

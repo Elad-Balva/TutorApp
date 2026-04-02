@@ -15,8 +15,12 @@ export const axiosClient = axios.create({
 axiosClient.interceptors.response.use(
   (response) => response,
   (error) => {
-    const message =
-      error?.response?.data?.error || error?.message || "Unexpected error occurred";
+    const data = error?.response?.data;
+    if (data?.errors && typeof data.errors === "object") {
+      const first = Object.values(data.errors).flat().find(Boolean);
+      return Promise.reject(new Error(String(first || data.title || "שגיאת אימות")));
+    }
+    const message = data?.error || data?.title || error?.message || "Unexpected error occurred";
     return Promise.reject(new Error(message));
   }
 );

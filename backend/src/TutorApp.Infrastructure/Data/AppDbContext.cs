@@ -106,6 +106,7 @@ public class AppDbContext : DbContext, IAppDbContext
 
             e.HasIndex(x => x.TeacherId);
             e.HasIndex(x => x.StudentId);
+            e.HasIndex(x => x.LessonId);
             e.HasQueryFilter(x => x.TeacherId == _currentTeacherService.TeacherId);
 
             e.HasOne(x => x.Teacher)
@@ -116,6 +117,11 @@ public class AppDbContext : DbContext, IAppDbContext
             e.HasOne(x => x.Student)
                 .WithMany(x => x.Payments)
                 .HasForeignKey(x => x.StudentId)
+                .OnDelete(DeleteBehavior.Restrict);
+
+            e.HasOne(x => x.Lesson)
+                .WithMany()
+                .HasForeignKey(x => x.LessonId)
                 .OnDelete(DeleteBehavior.Restrict);
         });
     }
