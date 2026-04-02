@@ -26,6 +26,9 @@ public class Student
 
     public bool IsActive { get; set; } = true;
 
+    /// <summary>When the student was added (set automatically on create).</summary>
+    public DateTimeOffset JoinedAt { get; set; }
+
     public Teacher Teacher { get; set; } = null!;
     public ICollection<LessonParticipant> LessonParticipants { get; set; } = new List<LessonParticipant>();
     public ICollection<Payment> Payments { get; set; } = new List<Payment>();

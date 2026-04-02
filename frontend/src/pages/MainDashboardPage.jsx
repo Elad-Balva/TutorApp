@@ -37,6 +37,7 @@ import { getStudentOptions } from "../api/studentsApi";
 import { useDebouncedValue } from "../hooks/useDebouncedValue";
 import { LessonCompleteDialog } from "../components/LessonCompleteDialog";
 import { buildWazeUrl } from "../utils/waze";
+import { formatLessonScheduleBadge } from "../utils/lessonRelativeTime";
 
 const SUBJECT_SUGGESTIONS = ["c#", "java", "פרויקט תכנות", "מתמטיקה", "אנגלית", "פיזיקה"];
 
@@ -59,7 +60,7 @@ const unpaidNamesLine = (lesson) => {
   return unpaid.map((p) => p.studentName).join(" · ") || "—";
 };
 
-const PAYMENT_METHOD_OPTIONS = ["מזומן", "העברה בנקאית", "אשראי", "Bit / אפליקציה", "אחר"];
+const PAYMENT_METHOD_OPTIONS = ["מזומן", "העברה בנקאית", "Bit / אפליקציה", "אחר"];
 
 const cardNameSx = { fontSize: "1.125rem", fontWeight: 800 };
 const cardMetaSx = { fontSize: "1.0625rem", lineHeight: 1.55, color: "text.secondary" };
@@ -279,9 +280,12 @@ export function MainDashboardPage() {
                 onClick={() => setExpandedFutureLessonId((prev) => (prev === lesson.lessonId ? null : lesson.lessonId))}
               >
                 <CardContent>
-                  <Typography variant="subtitle1" sx={{ ...cardNameSx, mb: 0.5 }}>
-                    {participantNamesLine(lesson)}
-                  </Typography>
+                  <Box sx={{ display: "flex", flexWrap: "wrap", gap: 1, alignItems: "center", mb: 0.5 }}>
+                    <Typography variant="subtitle1" sx={cardNameSx}>
+                      {participantNamesLine(lesson)}
+                    </Typography>
+                    <Chip size="small" label={formatLessonScheduleBadge(lesson)} variant="outlined" color="primary" />
+                  </Box>
                   <Box sx={{ display: "flex", flexWrap: "wrap", gap: 1, alignItems: "center", mb: 0.5 }}>
                     {renderModeChip(lesson)}
                   </Box>
@@ -362,9 +366,12 @@ export function MainDashboardPage() {
                 }
               >
                 <CardContent>
-                  <Typography variant="subtitle1" sx={{ ...cardNameSx, mb: 0.5 }}>
-                    {participantNamesLine(lesson)}
-                  </Typography>
+                  <Box sx={{ display: "flex", flexWrap: "wrap", gap: 1, alignItems: "center", mb: 0.5 }}>
+                    <Typography variant="subtitle1" sx={cardNameSx}>
+                      {participantNamesLine(lesson)}
+                    </Typography>
+                    <Chip size="small" label={formatLessonScheduleBadge(lesson)} variant="outlined" color="primary" />
+                  </Box>
                   <Box sx={{ display: "flex", flexWrap: "wrap", gap: 1, mb: 0.5 }}>
                     <Chip size="small" color="warning" label="לסיום" />
                     {renderModeChip(lesson)}
@@ -413,9 +420,12 @@ export function MainDashboardPage() {
                 }}
               >
                 <CardContent sx={{ animation: "fadeInUp 260ms ease both" }}>
-                  <Typography variant="subtitle1" sx={{ ...cardNameSx, mb: 0.5 }}>
-                    {unpaidNamesLine(lesson)}
-                  </Typography>
+                  <Box sx={{ display: "flex", flexWrap: "wrap", gap: 1, alignItems: "center", mb: 0.5 }}>
+                    <Typography variant="subtitle1" sx={cardNameSx}>
+                      {unpaidNamesLine(lesson)}
+                    </Typography>
+                    <Chip size="small" label={formatLessonScheduleBadge(lesson)} variant="outlined" color="primary" />
+                  </Box>
                   <Box sx={{ display: "flex", flexWrap: "wrap", gap: 1, mb: 0.5 }}>
                     <Chip size="small" color="error" label="לא שולם" variant="outlined" />
                     {renderModeChip(lesson)}

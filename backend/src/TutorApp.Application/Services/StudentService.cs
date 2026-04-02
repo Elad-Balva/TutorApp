@@ -68,7 +68,8 @@ public class StudentService : IStudentService
             BaseHourlyPrice = request.BaseHourlyPrice,
             AddressLine = string.IsNullOrWhiteSpace(request.AddressLine) ? null : request.AddressLine.Trim(),
             LocationNotes = string.IsNullOrWhiteSpace(request.LocationNotes) ? null : request.LocationNotes.Trim(),
-            IsActive = true
+            IsActive = true,
+            JoinedAt = DateTimeOffset.UtcNow
         };
 
         _db.Students.Add(student);
@@ -118,7 +119,8 @@ public class StudentService : IStudentService
                 x.IsActive,
                 x.BaseHourlyPrice,
                 x.AddressLine,
-                x.LocationNotes
+                x.LocationNotes,
+                x.JoinedAt
             ))
             .ToListAsync(ct);
 

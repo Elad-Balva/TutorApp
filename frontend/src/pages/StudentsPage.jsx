@@ -22,6 +22,11 @@ import { createStudent, getStudents, updateStudent } from "../api/studentsApi";
 
 const formatIls = (value) => `₪${Number(value || 0).toFixed(2)}`;
 
+const formatJoinedDate = (iso) => {
+  if (!iso) return "—";
+  return new Date(iso).toLocaleDateString("he-IL", { dateStyle: "long" });
+};
+
 export function StudentsPage() {
   const queryClient = useQueryClient();
   const [search, setSearch] = useState("");
@@ -116,6 +121,9 @@ export function StudentsPage() {
               </Typography>
               <Typography variant="body2" color="text.secondary">
                 {s.phoneNumber || "ללא טלפון"} | מחיר בסיס: {formatIls(s.baseHourlyPrice)}
+              </Typography>
+              <Typography variant="body2" color="text.secondary">
+                תאריך הצטרפות: {formatJoinedDate(s.joinedAt)}
               </Typography>
               {s.addressLine ? (
                 <Typography variant="body2" color="text.secondary">

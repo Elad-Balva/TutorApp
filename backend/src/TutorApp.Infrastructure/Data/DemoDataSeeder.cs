@@ -59,13 +59,14 @@ public static class DemoDataSeeder
                     BaseHourlyPrice = 120m,
                     AddressLine = "רחוב הרצל 1, תל אביב",
                     LocationNotes = "קומה 3, דירה 12",
-                    IsActive = true
+                    IsActive = true,
+                    JoinedAt = now.AddDays(-400)
                 },
-                new Student { Id = s2, TeacherId = TeacherId, Name = "איתי לוי", PhoneNumber = "052-4445566", BaseHourlyPrice = 100m, IsActive = true },
-                new Student { Id = s3, TeacherId = TeacherId, Name = "מיה דוד", PhoneNumber = "054-7778899", BaseHourlyPrice = 140m, IsActive = true },
-                new Student { Id = s4, TeacherId = TeacherId, Name = "יונתן ברק", PhoneNumber = "053-2223344", BaseHourlyPrice = 110m, IsActive = true },
-                new Student { Id = s5, TeacherId = TeacherId, Name = "שירה אבני", PhoneNumber = "050-9998877", BaseHourlyPrice = 95m, IsActive = true },
-                new Student { Id = s6, TeacherId = TeacherId, Name = "רועי גל", PhoneNumber = "058-1234567", BaseHourlyPrice = 130m, IsActive = true },
+                new Student { Id = s2, TeacherId = TeacherId, Name = "איתי לוי", PhoneNumber = "052-4445566", BaseHourlyPrice = 100m, IsActive = true, JoinedAt = now.AddDays(-180) },
+                new Student { Id = s3, TeacherId = TeacherId, Name = "מיה דוד", PhoneNumber = "054-7778899", BaseHourlyPrice = 140m, IsActive = true, JoinedAt = now.AddDays(-90) },
+                new Student { Id = s4, TeacherId = TeacherId, Name = "יונתן ברק", PhoneNumber = "053-2223344", BaseHourlyPrice = 110m, IsActive = true, JoinedAt = now.AddDays(-45) },
+                new Student { Id = s5, TeacherId = TeacherId, Name = "שירה אבני", PhoneNumber = "050-9998877", BaseHourlyPrice = 95m, IsActive = true, JoinedAt = now.AddDays(-14) },
+                new Student { Id = s6, TeacherId = TeacherId, Name = "רועי גל", PhoneNumber = "058-1234567", BaseHourlyPrice = 130m, IsActive = true, JoinedAt = now.AddDays(-3) },
             };
 
             db.Students.AddRange(students);

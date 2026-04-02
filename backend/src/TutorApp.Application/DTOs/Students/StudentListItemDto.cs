@@ -7,6 +7,7 @@ public record StudentListItemDto(
     bool IsActive,
     decimal BaseHourlyPrice,
     string? AddressLine,
-    string? LocationNotes
+    string? LocationNotes,
+    DateTimeOffset JoinedAt
 );
 

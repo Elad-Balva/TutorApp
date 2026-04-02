@@ -41,6 +41,7 @@ public class AppDbContext : DbContext, IAppDbContext
             e.Property(x => x.AddressLine).HasMaxLength(500);
             e.Property(x => x.LocationNotes).HasMaxLength(300);
             e.Property(x => x.BaseHourlyPrice).HasPrecision(10, 2);
+            e.Property(x => x.JoinedAt).IsRequired();
 
             e.HasIndex(x => x.TeacherId);
             e.HasQueryFilter(x => x.TeacherId == _currentTeacherService.TeacherId);
