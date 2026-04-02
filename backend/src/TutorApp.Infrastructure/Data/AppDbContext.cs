@@ -103,6 +103,7 @@ public class AppDbContext : DbContext, IAppDbContext
             e.HasKey(x => x.Id);
             e.Property(x => x.Amount).HasPrecision(10, 2);
             e.Property(x => x.PaymentMethod).HasMaxLength(50).IsRequired();
+            e.Property(x => x.Notes).HasMaxLength(500);
 
             e.HasIndex(x => x.TeacherId);
             e.HasIndex(x => x.StudentId);

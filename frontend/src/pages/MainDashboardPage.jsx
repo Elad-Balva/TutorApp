@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import {
   Alert,
@@ -16,8 +16,12 @@ import {
   DialogContent,
   DialogTitle,
   Fab,
+  FormControl,
   FormControlLabel,
+  FormLabel,
   List,
+  Radio,
+  RadioGroup,
   TextField,
   ToggleButton,
   ToggleButtonGroup,
@@ -55,6 +59,12 @@ const unpaidNamesLine = (lesson) => {
   return unpaid.map((p) => p.studentName).join(" · ") || "—";
 };
 
+const PAYMENT_METHOD_OPTIONS = ["מזומן", "העברה בנקאית", "אשראי", "Bit / אפליקציה", "אחר"];
+
+const cardNameSx = { fontSize: "1.125rem", fontWeight: 800 };
+const cardMetaSx = { fontSize: "1.0625rem", lineHeight: 1.55, color: "text.secondary" };
+const cardBodySx = { fontSize: "1.0625rem", lineHeight: 1.5 };
+
 export function MainDashboardPage() {
   const [dashboardTab, setDashboardTab] = useState("future");
   const [dialogOpen, setDialogOpen] = useState(false);
@@ -72,8 +82,19 @@ export function MainDashboardPage() {
   const [expandedFutureLessonId, setExpandedFutureLessonId] = useState(null);
   const [expandedAttentionLessonId, setExpandedAttentionLessonId] = useState(null);
   const [completeDialogLesson, setCompleteDialogLesson] = useState(null);
+  const [paymentTarget, setPaymentTarget] = useState(null);
+  const [paymentMethod, setPaymentMethod] = useState(PAYMENT_METHOD_OPTIONS[0]);
+  const [paymentNotes, setPaymentNotes] = useState("");
 
   const queryClient = useQueryClient();
+
+  useEffect(() => {
+    if (!paymentTarget) return;
+    setPaymentMethod(PAYMENT_METHOD_OPTIONS[0]);
+    setPaymentNotes("");
+    markPaidMutation.reset();
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- reset only when target identity changes
+  }, [paymentTarget?.lessonId, paymentTarget?.studentId]);
 
   const dashboardQuery = useQuery({
     queryKey: ["lessonsDashboard"],
@@ -128,12 +149,17 @@ export function MainDashboardPage() {
   });
 
   const markPaidMutation = useMutation({
-    mutationFn: ({ lessonId, studentId }) => markLessonParticipantPaid(lessonId, studentId),
+    mutationFn: ({ lessonId, studentId, paymentMethod: method, notes }) =>
+      markLessonParticipantPaid(lessonId, studentId, { paymentMethod: method, notes }),
     onSuccess: () => {
       setFormError(null);
+      setPaymentTarget(null);
       queryClient.invalidateQueries({ queryKey: ["lessonsDashboard"] });
     },
-    onError: (err) => setFormError(err?.message || "שגיאה בסימון תשלום"),
+    onError: (err) => {
+      const msg = err?.message || "שגיאה בסימון תשלום";
+      setFormError(msg);
+    },
   });
 
   const canSubmit = useMemo(() => {
@@ -205,7 +231,7 @@ export function MainDashboardPage() {
                 </Button>
               ) : null}
               {p.locationNotes && lesson.isInPerson ? (
-                <Typography variant="caption" color="text.secondary" sx={{ width: "100%" }}>
+                <Typography variant="body2" color="text.secondary" sx={{ width: "100%", fontSize: "0.95rem" }}>
                   {p.studentName}: {p.locationNotes}
                 </Typography>
               ) : null}
@@ -219,7 +245,7 @@ export function MainDashboardPage() {
   return (
     <Box sx={{ p: 2, pb: 10, display: "grid", gap: 2 }}>
       <Typography variant="h5" fontWeight={800}>
-        לוח בקרה
+        ניהול שיעורים
       </Typography>
 
       {dashboardQuery.error ? <Alert severity="error">{dashboardQuery.error.message}</Alert> : null}
@@ -253,24 +279,24 @@ export function MainDashboardPage() {
                 onClick={() => setExpandedFutureLessonId((prev) => (prev === lesson.lessonId ? null : lesson.lessonId))}
               >
                 <CardContent>
-                  <Typography variant="subtitle1" fontWeight={800} sx={{ mb: 0.5 }}>
+                  <Typography variant="subtitle1" sx={{ ...cardNameSx, mb: 0.5 }}>
                     {participantNamesLine(lesson)}
                   </Typography>
                   <Box sx={{ display: "flex", flexWrap: "wrap", gap: 1, alignItems: "center", mb: 0.5 }}>
                     {renderModeChip(lesson)}
                   </Box>
-                  <Typography variant="body2" color="text.secondary">
+                  <Typography variant="body1" sx={{ ...cardMetaSx }}>
                     {formatDate(lesson.startTime)} | משך צפוי: {lesson.expectedDurationInHours} שעות
                   </Typography>
                   {lesson.subject ? (
-                    <Typography variant="body2" color="text.secondary" sx={{ mt: 0.5 }}>
+                    <Typography variant="body1" sx={{ ...cardMetaSx, mt: 0.5 }}>
                       נושא: {lesson.subject}
                     </Typography>
                   ) : null}
 
                   <Collapse in={isExpanded} timeout={240} unmountOnExit>
                     <Box sx={{ mt: 1, display: "grid", gap: 1 }}>
-                      <Typography variant="body2" fontWeight={700}>
+                      <Typography variant="body1" fontWeight={700} sx={cardBodySx}>
                         פרטים
                       </Typography>
                       {renderParticipantChipsWithWaze(lesson)}
@@ -336,18 +362,18 @@ export function MainDashboardPage() {
                 }
               >
                 <CardContent>
-                  <Typography variant="subtitle1" fontWeight={800} sx={{ mb: 0.5 }}>
+                  <Typography variant="subtitle1" sx={{ ...cardNameSx, mb: 0.5 }}>
                     {participantNamesLine(lesson)}
                   </Typography>
                   <Box sx={{ display: "flex", flexWrap: "wrap", gap: 1, mb: 0.5 }}>
                     <Chip size="small" color="warning" label="לסיום" />
                     {renderModeChip(lesson)}
                   </Box>
-                  <Typography variant="body2" color="text.secondary">
+                  <Typography variant="body1" sx={{ ...cardMetaSx }}>
                     {formatDate(lesson.startTime)} | משך צפוי: {lesson.expectedDurationInHours} שעות
                   </Typography>
                   {lesson.subject ? (
-                    <Typography variant="body2" color="text.secondary" sx={{ mt: 0.5 }}>
+                    <Typography variant="body1" sx={{ ...cardMetaSx, mt: 0.5 }}>
                       נושא: {lesson.subject}
                     </Typography>
                   ) : null}
@@ -387,18 +413,18 @@ export function MainDashboardPage() {
                 }}
               >
                 <CardContent sx={{ animation: "fadeInUp 260ms ease both" }}>
-                  <Typography variant="subtitle1" fontWeight={800} sx={{ mb: 0.5 }}>
+                  <Typography variant="subtitle1" sx={{ ...cardNameSx, mb: 0.5 }}>
                     {unpaidNamesLine(lesson)}
                   </Typography>
                   <Box sx={{ display: "flex", flexWrap: "wrap", gap: 1, mb: 0.5 }}>
                     <Chip size="small" color="error" label="לא שולם" variant="outlined" />
                     {renderModeChip(lesson)}
                   </Box>
-                  <Typography variant="body2" color="text.secondary">
+                  <Typography variant="body1" sx={{ ...cardMetaSx }}>
                     {formatDate(lesson.startTime)}
                   </Typography>
                   {lesson.subject ? (
-                    <Typography variant="body2" color="text.secondary" sx={{ mt: 0.5 }}>
+                    <Typography variant="body1" sx={{ ...cardMetaSx, mt: 0.5 }}>
                       נושא: {lesson.subject}
                     </Typography>
                   ) : null}
@@ -415,7 +441,7 @@ export function MainDashboardPage() {
                           justifyContent: "space-between",
                         }}
                       >
-                        <Typography variant="body2">
+                        <Typography variant="body1" sx={cardBodySx}>
                           {p.studentName} — {formatIls(p.outstandingAmount)}
                         </Typography>
                         <Button
@@ -423,9 +449,16 @@ export function MainDashboardPage() {
                           size="small"
                           color="success"
                           disabled={markPaidMutation.isPending}
-                          onClick={() => markPaidMutation.mutate({ lessonId: lesson.lessonId, studentId: p.studentId })}
+                          onClick={() =>
+                            setPaymentTarget({
+                              lessonId: lesson.lessonId,
+                              studentId: p.studentId,
+                              studentName: p.studentName,
+                              amountLabel: formatIls(p.outstandingAmount),
+                            })
+                          }
                         >
-                          שולם
+                          תשלום בוצע
                         </Button>
                       </Box>
                     ))}
@@ -457,6 +490,68 @@ export function MainDashboardPage() {
         lesson={completeDialogLesson}
         onClose={() => setCompleteDialogLesson(null)}
       />
+
+      <Dialog
+        open={Boolean(paymentTarget)}
+        onClose={() => {
+          if (!markPaidMutation.isPending) setPaymentTarget(null);
+        }}
+        fullWidth
+        maxWidth="xs"
+      >
+        <DialogTitle>תשלום בוצע</DialogTitle>
+        <DialogContent sx={{ display: "grid", gap: 2, pt: "12px !important" }}>
+          {markPaidMutation.isError ? (
+            <Alert severity="error">{markPaidMutation.error?.message || formError}</Alert>
+          ) : null}
+          <Typography variant="body1" sx={{ ...cardBodySx, fontWeight: 600 }}>
+            {paymentTarget?.studentName} — {paymentTarget?.amountLabel}
+          </Typography>
+          <Typography variant="body2" color="text.secondary">
+            נא לבחור את אמצעי התשלום. הסכום המלא של השורה יירשם כשולם.
+          </Typography>
+          <FormControl>
+            <FormLabel id="payment-method-label">אמצעי תשלום</FormLabel>
+            <RadioGroup
+              aria-labelledby="payment-method-label"
+              value={paymentMethod}
+              onChange={(e) => setPaymentMethod(e.target.value)}
+            >
+              {PAYMENT_METHOD_OPTIONS.map((m) => (
+                <FormControlLabel key={m} value={m} control={<Radio />} label={m} />
+              ))}
+            </RadioGroup>
+          </FormControl>
+          <TextField
+            label="הערה (אופציונלי)"
+            value={paymentNotes}
+            onChange={(e) => setPaymentNotes(e.target.value)}
+            multiline
+            minRows={2}
+            inputProps={{ maxLength: 500 }}
+          />
+        </DialogContent>
+        <DialogActions>
+          <Button disabled={markPaidMutation.isPending} onClick={() => setPaymentTarget(null)}>
+            ביטול
+          </Button>
+          <Button
+            variant="contained"
+            disabled={markPaidMutation.isPending || !paymentTarget}
+            onClick={() => {
+              if (!paymentTarget) return;
+              markPaidMutation.mutate({
+                lessonId: paymentTarget.lessonId,
+                studentId: paymentTarget.studentId,
+                paymentMethod,
+                notes: paymentNotes,
+              });
+            }}
+          >
+            אישור
+          </Button>
+        </DialogActions>
+      </Dialog>
 
       <Dialog open={dialogOpen} onClose={() => setDialogOpen(false)} fullWidth maxWidth="sm">
         <DialogTitle>{dialogMode === "create" ? "הוספת שיעור" : "עריכת שיעור"}</DialogTitle>

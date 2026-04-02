@@ -36,7 +36,8 @@ function App() {
         </Toolbar>
       </AppBar>
 
-      <Drawer anchor="right" open={openMenu} onClose={() => setOpenMenu(false)}>
+      {/* anchor left + theme RTL → מגירה מצד כפתור התפריט ואנימציה נכונה */}
+      <Drawer anchor="left" open={openMenu} onClose={() => setOpenMenu(false)}>
         <Box sx={{ width: 260, pt: 2 }}>
           <List>
             <ListItemButton
@@ -46,7 +47,7 @@ function App() {
                 setOpenMenu(false);
               }}
             >
-              <ListItemText primary="לוח בקרה" />
+              <ListItemText primary="ניהול שיעורים" />
             </ListItemButton>
             <ListItemButton
               selected={activePage === "students"}

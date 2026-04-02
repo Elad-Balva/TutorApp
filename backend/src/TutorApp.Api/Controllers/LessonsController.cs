@@ -58,9 +58,13 @@ public class LessonsController : ControllerBase
     }
 
     [HttpPost("{lessonId:guid}/participants/{studentId:guid}/mark-paid")]
-    public async Task<IActionResult> MarkParticipantPaid(Guid lessonId, Guid studentId, CancellationToken ct)
+    public async Task<IActionResult> MarkParticipantPaid(
+        Guid lessonId,
+        Guid studentId,
+        [FromBody] MarkLessonParticipantPaidRequest request,
+        CancellationToken ct)
     {
-        await _lessonService.MarkLessonParticipantPaidAsync(lessonId, studentId, ct);
+        await _lessonService.MarkLessonParticipantPaidAsync(lessonId, studentId, request, ct);
         return NoContent();
     }
 }

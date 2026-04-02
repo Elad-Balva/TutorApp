@@ -18,6 +18,39 @@ const theme = createTheme({
   typography: {
     fontFamily: '"Segoe UI", "Rubik", "Heebo", "Arial Hebrew", sans-serif',
   },
+  components: {
+    MuiDialog: {
+      defaultProps: {
+        disableEnforceFocus: true,
+        disableAutoFocus: true,
+        disableRestoreFocus: true,
+        disableScrollLock: true,
+      },
+      styleOverrides: {
+        paper: {
+          touchAction: "manipulation",
+        },
+      },
+    },
+    MuiModal: {
+      defaultProps: {
+        disableEnforceFocus: true,
+      },
+      styleOverrides: {
+        root: {
+          WebkitTapHighlightColor: "transparent",
+        },
+      },
+    },
+    MuiDrawer: {
+      defaultProps: {
+        ModalProps: {
+          disableScrollLock: true,
+          keepMounted: false,
+        },
+      },
+    },
+  },
 });
 
 createRoot(document.getElementById("root")).render(

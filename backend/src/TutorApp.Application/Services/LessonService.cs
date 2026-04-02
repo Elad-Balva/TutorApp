@@ -377,7 +377,7 @@ public class LessonService : ILessonService
         _logger.LogInformation("Lesson {LessonId} updated for teacher {TeacherId}", lessonId, _currentTeacher.TeacherId);
     }
 
-    public async Task MarkLessonParticipantPaidAsync(Guid lessonId, Guid studentId, CancellationToken ct)
+    public async Task MarkLessonParticipantPaidAsync(Guid lessonId, Guid studentId, MarkLessonParticipantPaidRequest request, CancellationToken ct)
     {
         var lesson = await _db.Lessons
             .AsNoTracking()
@@ -399,6 +399,10 @@ public class LessonService : ILessonService
         if (outstanding <= 0m)
             return;
 
+        var method = request.PaymentMethod.Trim();
+        if (method.Length == 0)
+            throw new InvalidOperationException("נא לבחור אמצעי תשלום");
+
         _db.Payments.Add(new Payment
         {
             TeacherId = _currentTeacher.TeacherId,
@@ -406,7 +410,8 @@ public class LessonService : ILessonService
             LessonId = lessonId,
             Amount = outstanding,
             PaymentDate = DateTimeOffset.UtcNow,
-            PaymentMethod = "שולם"
+            PaymentMethod = method.Length > 50 ? method[..50] : method,
+            Notes = string.IsNullOrWhiteSpace(request.Notes) ? null : request.Notes.Trim()
         });
 
         await _db.SaveChangesAsync(ct);

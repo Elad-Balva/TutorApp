@@ -19,6 +19,9 @@ public class Payment
     [MaxLength(50)]
     public string PaymentMethod { get; set; } = string.Empty;
 
+    [MaxLength(500)]
+    public string? Notes { get; set; }
+
     public Teacher Teacher { get; set; } = null!;
     public Student Student { get; set; } = null!;
     public Lesson? Lesson { get; set; }

@@ -41,6 +41,9 @@ export const updateLesson = async (lessonId, { startTime, subject, expectedDurat
   });
 };
 
-export const markLessonParticipantPaid = async (lessonId, studentId) => {
-  await axiosClient.post(`/api/lessons/${lessonId}/participants/${studentId}/mark-paid`);
+export const markLessonParticipantPaid = async (lessonId, studentId, { paymentMethod, notes }) => {
+  await axiosClient.post(`/api/lessons/${lessonId}/participants/${studentId}/mark-paid`, {
+    paymentMethod,
+    notes: notes?.trim() || null,
+  });
 };
