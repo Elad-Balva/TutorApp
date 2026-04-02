@@ -3,29 +3,15 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import {
   Alert,
   Autocomplete,
-  Box,
-  Button,
-  Card,
-  CardContent,
   Checkbox,
-  Chip,
   CircularProgress,
   Collapse,
   Dialog,
   DialogActions,
   DialogContent,
   DialogTitle,
-  Fab,
-  FormControl,
   FormControlLabel,
-  FormLabel,
-  List,
-  Radio,
-  RadioGroup,
   TextField,
-  ToggleButton,
-  ToggleButtonGroup,
-  Typography,
 } from "@mui/material";
 import {
   createLesson,
@@ -41,8 +27,16 @@ import { formatLessonScheduleBadge } from "../utils/lessonRelativeTime";
 
 const SUBJECT_SUGGESTIONS = ["c#", "java", "פרויקט תכנות", "מתמטיקה", "אנגלית", "פיזיקה"];
 
+/** Date only — e.g. "9.4.2026" (time already shown large in card) */
+const formatDateOnly = (utc) =>
+  new Date(utc).toLocaleDateString("he-IL", { dateStyle: "short" });
+
+/** Full date + time — used inside dialogs where context is needed */
 const formatDate = (utc) =>
   new Date(utc).toLocaleString("he-IL", { dateStyle: "short", timeStyle: "short" });
+
+const formatTime = (utc) =>
+  new Date(utc).toLocaleTimeString("he-IL", { hour: "2-digit", minute: "2-digit" });
 
 const formatIls = (value) => `₪${Number(value || 0).toFixed(2)}`;
 
@@ -60,14 +54,110 @@ const unpaidNamesLine = (lesson) => {
   return unpaid.map((p) => p.studentName).join(" · ") || "—";
 };
 
-const PAYMENT_METHOD_OPTIONS = ["מזומן", "העברה בנקאית", "Bit / אפליקציה", "אחר"];
+const PAYMENT_METHODS = [
+  { id: "מזומן", label: "מזומן", icon: "payments" },
+  { id: "העברה בנקאית", label: "העברה בנקאית", icon: "account_balance" },
+  { id: "Bit / אפליקציה", label: "Bit / Pay App", icon: "install_mobile" },
+  { id: "אחר", label: "אחר", icon: "more_horiz" },
+];
 
-const cardNameSx = { fontSize: "1.125rem", fontWeight: 800 };
-const cardMetaSx = { fontSize: "1.0625rem", lineHeight: 1.55, color: "text.secondary" };
-const cardBodySx = { fontSize: "1.0625rem", lineHeight: 1.5 };
+/* ─── Lesson card ──────────────────────────────────────────────── */
+function LessonCard({ lesson, isExpanded, onToggle, onComplete, onEdit, accentColor }) {
+  const participants = lesson.participants || [];
 
-export function MainDashboardPage() {
-  const [dashboardTab, setDashboardTab] = useState("future");
+  return (
+    <div
+      className="lesson-card"
+      style={accentColor ? { borderColor: accentColor } : undefined}
+      onClick={onToggle}
+    >
+      {/* Row: name/meta + large time */}
+      <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", gap: 12 }}>
+        {/* Info column */}
+        <div style={{ flex: 1, minWidth: 0 }}>
+          {/* Name + schedule badge */}
+          <div style={{ display: "flex", flexWrap: "wrap", alignItems: "center", gap: 6, marginBottom: 5 }}>
+            <span style={{ fontFamily: "'Manrope',sans-serif", fontWeight: 800, fontSize: "1.0625rem", color: "#e2e2e8", lineHeight: 1.2 }}>
+              {participantNamesLine(lesson)}
+            </span>
+            <span className="badge-primary">{formatLessonScheduleBadge(lesson)}</span>
+          </div>
+          {/* Mode + subject */}
+          <div style={{ display: "flex", flexWrap: "wrap", gap: 5, alignItems: "center" }}>
+            <span className="badge-neutral">{lesson.isInPerson ? "פרונטלי" : "זום"}</span>
+            {lesson.subject ? (
+              <span style={{ fontSize: "0.75rem", color: "rgba(192,199,213,0.55)" }}>{lesson.subject}</span>
+            ) : null}
+          </div>
+          {/* Date only (time already shown large on the right) */}
+          <p style={{ fontSize: "0.7rem", color: "rgba(192,199,213,0.35)", marginTop: 4 }}>
+            {formatDateOnly(lesson.startTime)}
+          </p>
+        </div>
+
+        {/* Time column */}
+        <div style={{ flexShrink: 0, textAlign: "center", minWidth: 56 }}>
+          <p style={{ fontFamily: "'Manrope',sans-serif", fontWeight: 800, fontSize: "1.625rem", color: "#1493ff", lineHeight: 1 }}>
+            {formatTime(lesson.startTime)}
+          </p>
+          <p style={{ fontSize: "0.6875rem", color: "rgba(192,199,213,0.4)", marginTop: 3 }}>
+            {lesson.expectedDurationInHours} שע&apos;
+          </p>
+        </div>
+      </div>
+
+      {/* Expanded section */}
+      <Collapse in={isExpanded} timeout={220} unmountOnExit>
+        <div
+          style={{ marginTop: 12, paddingTop: 12, borderTop: "1px solid rgba(255,255,255,0.06)" }}
+          onClick={(e) => e.stopPropagation()}
+        >
+          {/* Waze links — only shown for in-person with addresses */}
+          {lesson.isInPerson && participants.some((p) => p.addressLine) ? (
+            <div style={{ display: "flex", flexWrap: "wrap", gap: 6, marginBottom: 10 }}>
+              {participants.map((p) => {
+                const wazeUrl = buildWazeUrl(p.addressLine, p.locationNotes);
+                if (!wazeUrl) return null;
+                return (
+                  <div key={p.studentId} style={{ display: "flex", flexWrap: "wrap", gap: 5, alignItems: "center" }}>
+                    <a
+                      href={wazeUrl}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      style={{ display: "inline-flex", alignItems: "center", gap: 4, fontSize: "0.75rem", color: "#a3c9ff", border: "1px solid rgba(163,201,255,0.25)", borderRadius: 99, padding: "3px 10px", textDecoration: "none" }}
+                    >
+                      <span className="material-symbols-outlined" style={{ fontSize: 13 }}>navigation</span>
+                      {participants.length > 1 ? `Waze · ${p.studentName}` : "Waze"}
+                    </a>
+                    {p.locationNotes ? (
+                      <span style={{ width: "100%", fontSize: "0.7rem", color: "rgba(192,199,213,0.45)" }}>
+                        {p.locationNotes}
+                      </span>
+                    ) : null}
+                  </div>
+                );
+              })}
+            </div>
+          ) : null}
+
+          {/* Action buttons */}
+          <div style={{ display: "flex", flexWrap: "wrap", gap: 8 }}>
+            <button className="btn-primary-sm" onClick={onComplete}>
+              התחלה / סיים
+            </button>
+            <button className="btn-outline-sm" onClick={onEdit}>
+              ערוך
+            </button>
+          </div>
+        </div>
+      </Collapse>
+    </div>
+  );
+}
+
+/* ─── Main component ──────────────────────────────────────────── */
+export function MainDashboardPage({ defaultTab = "future" }) {
+  const [dashboardTab, setDashboardTab] = useState(defaultTab);
   const [dialogOpen, setDialogOpen] = useState(false);
   const [dialogMode, setDialogMode] = useState("create");
   const [editingLessonId, setEditingLessonId] = useState(null);
@@ -84,17 +174,17 @@ export function MainDashboardPage() {
   const [expandedAttentionLessonId, setExpandedAttentionLessonId] = useState(null);
   const [completeDialogLesson, setCompleteDialogLesson] = useState(null);
   const [paymentTarget, setPaymentTarget] = useState(null);
-  const [paymentMethod, setPaymentMethod] = useState(PAYMENT_METHOD_OPTIONS[0]);
+  const [paymentMethod, setPaymentMethod] = useState(PAYMENT_METHODS[0].id);
   const [paymentNotes, setPaymentNotes] = useState("");
 
   const queryClient = useQueryClient();
 
   useEffect(() => {
     if (!paymentTarget) return;
-    setPaymentMethod(PAYMENT_METHOD_OPTIONS[0]);
+    setPaymentMethod(PAYMENT_METHODS[0].id);
     setPaymentNotes("");
     markPaidMutation.reset();
-    // eslint-disable-next-line react-hooks/exhaustive-deps -- reset only when target identity changes
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [paymentTarget?.lessonId, paymentTarget?.studentId]);
 
   const dashboardQuery = useQuery({
@@ -157,10 +247,7 @@ export function MainDashboardPage() {
       setPaymentTarget(null);
       queryClient.invalidateQueries({ queryKey: ["lessonsDashboard"] });
     },
-    onError: (err) => {
-      const msg = err?.message || "שגיאה בסימון תשלום";
-      setFormError(msg);
-    },
+    onError: (err) => setFormError(err?.message || "שגיאה בסימון תשלום"),
   });
 
   const canSubmit = useMemo(() => {
@@ -201,352 +288,324 @@ export function MainDashboardPage() {
     setDialogOpen(true);
   };
 
-  const renderModeChip = (lesson) =>
-    lesson.isInPerson ? (
-      <Chip size="small" label="פרונטלי" variant="outlined" />
-    ) : (
-      <Chip size="small" label="רשתי" variant="outlined" />
-    );
-
-  const renderParticipantChipsWithWaze = (lesson) => {
-    const participants = lesson.participants || [];
-    return (
-      <Box sx={{ display: "flex", flexWrap: "wrap", gap: 1, alignItems: "center" }}>
-        {participants.map((p) => {
-          const wazeUrl =
-            lesson.isInPerson ? buildWazeUrl(p.addressLine, p.locationNotes) : null;
-          return (
-            <Box key={p.studentId} sx={{ display: "flex", flexWrap: "wrap", gap: 0.5, alignItems: "center" }}>
-              <Chip label={p.studentName} size="small" />
-              {wazeUrl ? (
-                <Button
-                  component="a"
-                  href={wazeUrl}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  size="small"
-                  variant="outlined"
-                  sx={{ minWidth: "auto", py: 0.25, px: 1 }}
-                >
-                  Waze
-                </Button>
-              ) : null}
-              {p.locationNotes && lesson.isInPerson ? (
-                <Typography variant="body2" color="text.secondary" sx={{ width: "100%", fontSize: "0.95rem" }}>
-                  {p.studentName}: {p.locationNotes}
-                </Typography>
-              ) : null}
-            </Box>
-          );
-        })}
-      </Box>
-    );
-  };
-
   return (
-    <Box sx={{ p: 2, pb: 10, display: "grid", gap: 2 }}>
-      <Typography variant="h5" fontWeight={800}>
-        ניהול שיעורים
-      </Typography>
+    <div className="page-container">
+
+      {/* Page header */}
+      <div>
+        <h1 className="page-title">לוח הבקרה</h1>
+        <p className="page-subtitle">ניהול שיעורים ותשלומים</p>
+      </div>
 
       {dashboardQuery.error ? <Alert severity="error">{dashboardQuery.error.message}</Alert> : null}
       {formError && !dialogOpen ? <Alert severity="error">{formError}</Alert> : null}
 
-      <ToggleButtonGroup
-        exclusive
-        fullWidth
-        value={dashboardTab}
-        onChange={(_, v) => v && setDashboardTab(v)}
-        color="primary"
-        sx={{ "& .MuiToggleButton-root": { py: 1.25 } }}
-      >
-        <ToggleButton value="future">שיעורים עתידיים</ToggleButton>
-        <ToggleButton value="attention">טרם שולמו</ToggleButton>
-      </ToggleButtonGroup>
+      {/* Tab switcher */}
+      <div style={{ display: "flex", gap: 4, padding: 4, background: "#0c0e12", borderRadius: 16, border: "1px solid rgba(255,255,255,0.06)" }}>
+        {[
+          { id: "future", label: "שיעורים עתידיים" },
+          { id: "attention", label: "טרם שולמו" },
+        ].map((tab) => (
+          <button
+            key={tab.id}
+            onClick={() => setDashboardTab(tab.id)}
+            style={{
+              flex: 1,
+              padding: "0.625rem 0.5rem",
+              borderRadius: 12,
+              fontFamily: "'Manrope', sans-serif",
+              fontSize: "0.8125rem",
+              fontWeight: 700,
+              transition: "all 0.2s ease",
+              background: dashboardTab === tab.id ? "#1c1e24" : "transparent",
+              color: dashboardTab === tab.id ? "#a3c9ff" : "rgba(192,199,213,0.5)",
+              boxShadow: dashboardTab === tab.id ? "0 2px 8px rgba(0,0,0,0.3)" : "none",
+            }}
+          >
+            {tab.label}
+          </button>
+        ))}
+      </div>
 
-      {dashboardTab === "future" ? (
-        <List disablePadding sx={{ display: "grid", gap: 1 }}>
-          {(dashboardQuery.data?.futureLessons || []).map((lesson) => {
-            const isExpanded = expandedFutureLessonId === lesson.lessonId;
-            return (
-              <Card
+      {/* Lessons list */}
+      <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
+        {dashboardTab === "future" ? (
+          <>
+            {(dashboardQuery.data?.futureLessons || []).map((lesson) => (
+              <LessonCard
                 key={lesson.lessonId}
-                variant="outlined"
-                sx={{
-                  cursor: "pointer",
-                  transition: "transform 180ms ease, box-shadow 180ms ease",
-                  "&:hover": { transform: "translateY(-2px)", boxShadow: 2 },
-                }}
-                onClick={() => setExpandedFutureLessonId((prev) => (prev === lesson.lessonId ? null : lesson.lessonId))}
-              >
-                <CardContent>
-                  <Box sx={{ display: "flex", flexWrap: "wrap", gap: 1, alignItems: "center", mb: 0.5 }}>
-                    <Typography variant="subtitle1" sx={cardNameSx}>
-                      {participantNamesLine(lesson)}
-                    </Typography>
-                    <Chip size="small" label={formatLessonScheduleBadge(lesson)} variant="outlined" color="primary" />
-                  </Box>
-                  <Box sx={{ display: "flex", flexWrap: "wrap", gap: 1, alignItems: "center", mb: 0.5 }}>
-                    {renderModeChip(lesson)}
-                  </Box>
-                  <Typography variant="body1" sx={{ ...cardMetaSx }}>
-                    {formatDate(lesson.startTime)} | משך צפוי: {lesson.expectedDurationInHours} שעות
-                  </Typography>
-                  {lesson.subject ? (
-                    <Typography variant="body1" sx={{ ...cardMetaSx, mt: 0.5 }}>
-                      נושא: {lesson.subject}
-                    </Typography>
-                  ) : null}
+                lesson={lesson}
+                isExpanded={expandedFutureLessonId === lesson.lessonId}
+                onToggle={() => setExpandedFutureLessonId((prev) => (prev === lesson.lessonId ? null : lesson.lessonId))}
+                onComplete={() => setCompleteDialogLesson(lesson)}
+                onEdit={() => openEditDialog(lesson)}
+              />
+            ))}
+            {!dashboardQuery.isLoading && (dashboardQuery.data?.futureLessons || []).length === 0 ? (
+              <div style={{ background: "#1c1e24", border: "1px solid rgba(255,255,255,0.07)", borderRadius: 16, padding: "2rem", textAlign: "center" }}>
+                <span className="material-symbols-outlined" style={{ fontSize: 40, color: "#404753", display: "block", margin: "0 auto 12px" }}>calendar_today</span>
+                <p style={{ color: "rgba(192,199,213,0.5)", fontSize: "0.875rem" }}>אין שיעורים עתידיים</p>
+              </div>
+            ) : null}
+          </>
+        ) : (
+          <>
+            {awaitingList.length > 0 ? (
+              <p style={{ fontSize: "0.6875rem", fontWeight: 600, color: "rgba(192,199,213,0.45)", letterSpacing: "0.08em", textTransform: "uppercase", paddingRight: 4 }}>
+                ממתינים לסיום
+              </p>
+            ) : null}
 
-                  <Collapse in={isExpanded} timeout={240} unmountOnExit>
-                    <Box sx={{ mt: 1, display: "grid", gap: 1 }}>
-                      <Typography variant="body1" fontWeight={700} sx={cardBodySx}>
-                        פרטים
-                      </Typography>
-                      {renderParticipantChipsWithWaze(lesson)}
-
-                      <Box sx={{ display: "flex", flexWrap: "wrap", gap: 1 }}>
-                        <Button
-                          variant="contained"
-                          size="small"
-                          color="secondary"
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            setCompleteDialogLesson(lesson);
-                          }}
-                        >
-                          סיים שיעור
-                        </Button>
-                        <Button
-                          variant="outlined"
-                          size="small"
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            openEditDialog(lesson);
-                          }}
-                        >
-                          ערוך
-                        </Button>
-                      </Box>
-                    </Box>
-                  </Collapse>
-                </CardContent>
-              </Card>
-            );
-          })}
-
-          {!dashboardQuery.isLoading && (dashboardQuery.data?.futureLessons || []).length === 0 ? (
-            <Typography variant="body2" color="text.secondary">
-              אין שיעורים עתידיים (לפי מועד ומשך צפוי)
-            </Typography>
-          ) : null}
-        </List>
-      ) : (
-        <List disablePadding sx={{ display: "grid", gap: 1 }}>
-          {awaitingList.length > 0 ? (
-            <Typography variant="subtitle2" color="text.secondary">
-              ממתינים לסיום
-            </Typography>
-          ) : null}
-          {awaitingList.map((lesson) => {
-            const isExpanded = expandedAttentionLessonId === `a-${lesson.lessonId}`;
-            return (
-              <Card
+            {awaitingList.map((lesson) => (
+              <LessonCard
                 key={`a-${lesson.lessonId}`}
-                variant="outlined"
-                sx={{
-                  borderColor: "warning.main",
-                  borderWidth: 1,
-                  cursor: "pointer",
-                  transition: "transform 180ms ease, box-shadow 180ms ease",
-                  "&:hover": { transform: "translateY(-2px)", boxShadow: 2 },
-                }}
-                onClick={() =>
-                  setExpandedAttentionLessonId((prev) => (prev === `a-${lesson.lessonId}` ? null : `a-${lesson.lessonId}`))
+                lesson={lesson}
+                isExpanded={expandedAttentionLessonId === `a-${lesson.lessonId}`}
+                accentColor="rgba(255,196,0,0.25)"
+                onToggle={() =>
+                  setExpandedAttentionLessonId((prev) =>
+                    prev === `a-${lesson.lessonId}` ? null : `a-${lesson.lessonId}`
+                  )
                 }
-              >
-                <CardContent>
-                  <Box sx={{ display: "flex", flexWrap: "wrap", gap: 1, alignItems: "center", mb: 0.5 }}>
-                    <Typography variant="subtitle1" sx={cardNameSx}>
-                      {participantNamesLine(lesson)}
-                    </Typography>
-                    <Chip size="small" label={formatLessonScheduleBadge(lesson)} variant="outlined" color="primary" />
-                  </Box>
-                  <Box sx={{ display: "flex", flexWrap: "wrap", gap: 1, mb: 0.5 }}>
-                    <Chip size="small" color="warning" label="לסיום" />
-                    {renderModeChip(lesson)}
-                  </Box>
-                  <Typography variant="body1" sx={{ ...cardMetaSx }}>
-                    {formatDate(lesson.startTime)} | משך צפוי: {lesson.expectedDurationInHours} שעות
-                  </Typography>
-                  {lesson.subject ? (
-                    <Typography variant="body1" sx={{ ...cardMetaSx, mt: 0.5 }}>
-                      נושא: {lesson.subject}
-                    </Typography>
-                  ) : null}
+                onComplete={() => setCompleteDialogLesson(lesson)}
+                onEdit={() => openEditDialog(lesson)}
+              />
+            ))}
 
-                  <Box sx={{ display: "flex", flexWrap: "wrap", gap: 1, mt: 1 }} onClick={(e) => e.stopPropagation()}>
-                    <Button variant="contained" size="small" onClick={() => setCompleteDialogLesson(lesson)}>
-                      סיים שיעור
-                    </Button>
-                    <Button variant="outlined" size="small" onClick={() => openEditDialog(lesson)}>
-                      ערוך
-                    </Button>
-                  </Box>
-                  <Collapse in={isExpanded} timeout={240} unmountOnExit>
-                    <Box sx={{ mt: 1, display: "grid", gap: 1 }}>
-                      {renderParticipantChipsWithWaze(lesson)}
-                    </Box>
-                  </Collapse>
-                </CardContent>
-              </Card>
-            );
-          })}
+            {unpaidList.length > 0 ? (
+              <p style={{ fontSize: "0.6875rem", fontWeight: 600, color: "rgba(192,199,213,0.45)", letterSpacing: "0.08em", textTransform: "uppercase", paddingRight: 4, marginTop: 4 }}>
+                יתרה לתשלום
+              </p>
+            ) : null}
 
-          {unpaidList.length > 0 ? (
-            <Typography variant="subtitle2" color="text.secondary" sx={{ mt: awaitingList.length ? 2 : 0 }}>
-              יתרה לתשלום
-            </Typography>
-          ) : null}
-          {unpaidList.map((lesson) => {
-            const unpaidParticipants = (lesson.participants || []).filter((p) => !p.isPaid && p.outstandingAmount > 0);
-            return (
-              <Card
-                key={lesson.lessonId}
-                variant="outlined"
-                sx={{
-                  transition: "transform 180ms ease, box-shadow 180ms ease",
-                  "&:hover": { transform: "translateY(-2px)", boxShadow: 2 },
-                }}
-              >
-                <CardContent sx={{ animation: "fadeInUp 260ms ease both" }}>
-                  <Box sx={{ display: "flex", flexWrap: "wrap", gap: 1, alignItems: "center", mb: 0.5 }}>
-                    <Typography variant="subtitle1" sx={cardNameSx}>
+            {unpaidList.map((lesson) => {
+              const unpaidParticipants = (lesson.participants || []).filter(
+                (p) => !p.isPaid && p.outstandingAmount > 0
+              );
+              return (
+                <div
+                  key={lesson.lessonId}
+                  className="lesson-card"
+                  style={{ cursor: "default" }}
+                >
+                  <div style={{ display: "flex", flexWrap: "wrap", alignItems: "center", gap: 6, marginBottom: 8 }}>
+                    <span style={{ fontFamily: "'Manrope', sans-serif", fontWeight: 800, fontSize: "1.0625rem", color: "#e2e2e8" }}>
                       {unpaidNamesLine(lesson)}
-                    </Typography>
-                    <Chip size="small" label={formatLessonScheduleBadge(lesson)} variant="outlined" color="primary" />
-                  </Box>
-                  <Box sx={{ display: "flex", flexWrap: "wrap", gap: 1, mb: 0.5 }}>
-                    <Chip size="small" color="error" label="לא שולם" variant="outlined" />
-                    {renderModeChip(lesson)}
-                  </Box>
-                  <Typography variant="body1" sx={{ ...cardMetaSx }}>
-                    {formatDate(lesson.startTime)}
-                  </Typography>
+                    </span>
+                    <span className="badge-error">לא שולם</span>
+                    <span className="badge-neutral">{lesson.isInPerson ? "פרונטלי" : "זום"}</span>
+                  </div>
                   {lesson.subject ? (
-                    <Typography variant="body1" sx={{ ...cardMetaSx, mt: 0.5 }}>
-                      נושא: {lesson.subject}
-                    </Typography>
+                    <p style={{ fontSize: "0.75rem", color: "rgba(192,199,213,0.5)", marginBottom: 8 }}>{lesson.subject}</p>
                   ) : null}
+                  <p style={{ fontSize: "0.7rem", color: "rgba(192,199,213,0.35)", marginBottom: 12 }}>
+                    {formatDateOnly(lesson.startTime)}
+                  </p>
 
-                  <Box sx={{ mt: 1.5, display: "grid", gap: 1 }}>
+                  <div style={{ borderTop: "1px solid rgba(255,255,255,0.06)", paddingTop: 12, display: "flex", flexDirection: "column", gap: 10 }}>
                     {unpaidParticipants.map((p) => (
-                      <Box
-                        key={p.studentId}
-                        sx={{
-                          display: "flex",
-                          flexWrap: "wrap",
-                          gap: 1,
-                          alignItems: "center",
-                          justifyContent: "space-between",
-                        }}
-                      >
-                        <Typography variant="body1" sx={cardBodySx}>
-                          {p.studentName} — {formatIls(p.outstandingAmount)}
-                        </Typography>
-                        <Button
-                          variant="contained"
-                          size="small"
-                          color="success"
+                      <div key={p.studentId} style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12 }}>
+                        <div>
+                          <p style={{ fontSize: "0.875rem", fontWeight: 600, color: "#e2e2e8" }}>{p.studentName}</p>
+                          <p style={{ fontFamily: "'Manrope', sans-serif", fontWeight: 800, fontSize: "1.25rem", color: "#9ffb00", lineHeight: 1.1 }}>
+                            {formatIls(p.outstandingAmount)}
+                          </p>
+                        </div>
+                        <button
+                          className="btn-primary-sm"
                           disabled={markPaidMutation.isPending}
                           onClick={() =>
                             setPaymentTarget({
                               lessonId: lesson.lessonId,
                               studentId: p.studentId,
                               studentName: p.studentName,
-                              amountLabel: formatIls(p.outstandingAmount),
+                              amount: p.outstandingAmount,
                             })
                           }
                         >
                           תשלום בוצע
-                        </Button>
-                      </Box>
+                        </button>
+                      </div>
                     ))}
-                  </Box>
-                </CardContent>
-              </Card>
-            );
-          })}
+                  </div>
+                </div>
+              );
+            })}
 
-          {!dashboardQuery.isLoading && awaitingList.length === 0 && unpaidList.length === 0 ? (
-            <Typography variant="body2" color="text.secondary">
-              אין פריטים בקטגוריה זו
-            </Typography>
-          ) : null}
-        </List>
-      )}
+            {!dashboardQuery.isLoading && awaitingList.length === 0 && unpaidList.length === 0 ? (
+              <div style={{ background: "#1c1e24", border: "1px solid rgba(255,255,255,0.07)", borderRadius: 16, padding: "2rem", textAlign: "center" }}>
+                <span className="material-symbols-outlined" style={{ fontSize: 40, color: "#404753", display: "block", margin: "0 auto 12px" }}>check_circle</span>
+                <p style={{ color: "rgba(192,199,213,0.5)", fontSize: "0.875rem" }}>הכל מעודכן — אין פריטים הממתינים לטיפול</p>
+              </div>
+            ) : null}
+          </>
+        )}
+      </div>
 
-      <Fab
-        color="primary"
-        aria-label="add lesson"
+      {/* FAB */}
+      <button
         onClick={openCreateDialog}
-        sx={{ position: "fixed", bottom: 16, right: 16 }}
+        aria-label="הוסף שיעור"
+        style={{
+          position: "fixed",
+          bottom: "6.5rem",
+          left: "1.25rem",
+          width: 56,
+          height: 56,
+          borderRadius: "50%",
+          background: "linear-gradient(135deg, #a3c9ff, #1493ff)",
+          boxShadow: "0 8px 30px rgba(20,147,255,0.35)",
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "center",
+          zIndex: 40,
+          transition: "transform 0.2s ease, box-shadow 0.2s ease",
+        }}
+        onMouseEnter={(e) => { e.currentTarget.style.transform = "scale(1.08)"; e.currentTarget.style.boxShadow = "0 12px 40px rgba(20,147,255,0.45)"; }}
+        onMouseLeave={(e) => { e.currentTarget.style.transform = "scale(1)"; e.currentTarget.style.boxShadow = "0 8px 30px rgba(20,147,255,0.35)"; }}
       >
-        +
-      </Fab>
+        <span className="material-symbols-outlined" style={{ color: "#002a51", fontSize: 28 }}>add</span>
+      </button>
 
+      {/* ── Lesson Complete Dialog ──────────────────────────────── */}
       <LessonCompleteDialog
         open={Boolean(completeDialogLesson)}
         lesson={completeDialogLesson}
         onClose={() => setCompleteDialogLesson(null)}
       />
 
+      {/* ── Payment Dialog ─────────────────────────────────────── */}
       <Dialog
         open={Boolean(paymentTarget)}
-        onClose={() => {
-          if (!markPaidMutation.isPending) setPaymentTarget(null);
-        }}
+        onClose={() => { if (!markPaidMutation.isPending) setPaymentTarget(null); }}
         fullWidth
         maxWidth="xs"
       >
-        <DialogTitle>תשלום בוצע</DialogTitle>
-        <DialogContent sx={{ display: "grid", gap: 2, pt: "12px !important" }}>
-          {markPaidMutation.isError ? (
-            <Alert severity="error">{markPaidMutation.error?.message || formError}</Alert>
-          ) : null}
-          <Typography variant="body1" sx={{ ...cardBodySx, fontWeight: 600 }}>
-            {paymentTarget?.studentName} — {paymentTarget?.amountLabel}
-          </Typography>
-          <Typography variant="body2" color="text.secondary">
-            נא לבחור את אמצעי התשלום. הסכום המלא של השורה יירשם כשולם.
-          </Typography>
-          <FormControl>
-            <FormLabel id="payment-method-label">אמצעי תשלום</FormLabel>
-            <RadioGroup
-              aria-labelledby="payment-method-label"
-              value={paymentMethod}
-              onChange={(e) => setPaymentMethod(e.target.value)}
-            >
-              {PAYMENT_METHOD_OPTIONS.map((m) => (
-                <FormControlLabel key={m} value={m} control={<Radio />} label={m} />
-              ))}
-            </RadioGroup>
-          </FormControl>
-          <TextField
-            label="הערה (אופציונלי)"
-            value={paymentNotes}
-            onChange={(e) => setPaymentNotes(e.target.value)}
-            multiline
-            minRows={2}
-            inputProps={{ maxLength: 500 }}
-          />
+        <DialogTitle sx={{ pb: 0.5 }}>
+          <p style={{ fontFamily: "'Manrope',sans-serif", fontWeight: 800, fontSize: "1.75rem", color: "#c6c6c6", letterSpacing: "-0.02em", margin: 0 }}>
+            תשלום בוצע
+          </p>
+          <p style={{ fontFamily: "'Inter',sans-serif", fontWeight: 400, fontSize: "0.8125rem", color: "rgba(192,199,213,0.65)", marginTop: 4 }}>
+            עדכון יתרת התלמיד לאחר קבלת תשלום
+          </p>
+        </DialogTitle>
+
+        <DialogContent>
+          <div style={{ display: "flex", flexDirection: "column", gap: 20 }}>
+            {markPaidMutation.isError ? (
+              <Alert severity="error">{markPaidMutation.error?.message}</Alert>
+            ) : null}
+
+            {/* Amount card */}
+            <div style={{
+              background: "rgba(28,30,36,0.95)",
+              border: "1px solid rgba(255,255,255,0.07)",
+              borderRadius: 20,
+              padding: "1.5rem",
+              display: "flex",
+              flexDirection: "column",
+              alignItems: "center",
+              textAlign: "center",
+              position: "relative",
+              overflow: "hidden",
+            }}>
+              <div style={{ position: "absolute", top: -30, right: -30, width: 100, height: 100, borderRadius: "50%", background: "rgba(163,201,255,0.05)", filter: "blur(20px)" }} />
+              <span style={{ fontSize: "0.6875rem", fontWeight: 600, letterSpacing: "0.1em", textTransform: "uppercase", color: "rgba(192,199,213,0.6)", marginBottom: 8 }}>
+                {paymentTarget?.studentName} · סכום לתשלום
+              </span>
+              <div style={{ display: "flex", alignItems: "baseline", gap: 6 }}>
+                <span style={{ fontFamily: "'Manrope',sans-serif", fontWeight: 800, fontSize: "2.75rem", color: "#9ffb00", letterSpacing: "-0.03em", lineHeight: 1 }}>
+                  {Number(paymentTarget?.amount || 0).toFixed(2)}
+                </span>
+                <span style={{ fontFamily: "'Manrope',sans-serif", fontWeight: 700, fontSize: "1.5rem", color: "rgba(159,251,0,0.75)" }}>₪</span>
+              </div>
+            </div>
+
+            {/* Payment methods — 2×2 grid using flex-wrap */}
+            <div>
+              <p style={{ fontFamily: "'Manrope',sans-serif", fontWeight: 700, fontSize: "0.9375rem", color: "#e2e2e8", marginBottom: 12 }}>
+                אמצעי תשלום
+              </p>
+              <div style={{ display: "flex", flexWrap: "wrap", gap: 10 }}>
+                {PAYMENT_METHODS.map((opt) => {
+                  const isSelected = paymentMethod === opt.id;
+                  return (
+                    <button
+                      key={opt.id}
+                      onClick={() => setPaymentMethod(opt.id)}
+                      style={{
+                        width: "calc(50% - 5px)",
+                        padding: "14px 8px",
+                        borderRadius: 14,
+                        display: "flex",
+                        flexDirection: "column",
+                        alignItems: "center",
+                        gap: 6,
+                        background: isSelected ? "rgba(20,147,255,0.1)" : "rgba(28,30,36,0.8)",
+                        border: isSelected ? "2px solid rgba(20,147,255,0.45)" : "1px solid rgba(255,255,255,0.07)",
+                        transition: "all 0.15s ease",
+                        cursor: "pointer",
+                      }}
+                    >
+                      <span
+                        className="material-symbols-outlined"
+                        style={{
+                          fontSize: 26,
+                          color: isSelected ? "#a3c9ff" : "rgba(192,199,213,0.5)",
+                          fontVariationSettings: isSelected ? "'FILL' 1" : "'FILL' 0",
+                        }}
+                      >
+                        {opt.icon}
+                      </span>
+                      <span style={{
+                        fontFamily: "'Manrope',sans-serif",
+                        fontWeight: 700,
+                        fontSize: "0.75rem",
+                        color: isSelected ? "#a3c9ff" : "rgba(192,199,213,0.6)",
+                      }}>
+                        {opt.label}
+                      </span>
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+
+            {/* Note */}
+            <div>
+              <label style={{ display: "block", fontFamily: "'Manrope',sans-serif", fontWeight: 700, fontSize: "0.9375rem", color: "#e2e2e8", marginBottom: 8 }}>
+                הערה (אופציונלי)
+              </label>
+              <textarea
+                value={paymentNotes}
+                onChange={(e) => setPaymentNotes(e.target.value)}
+                placeholder="הוסף הערה לגבי התשלום..."
+                rows={3}
+                maxLength={500}
+                style={{
+                  width: "100%",
+                  boxSizing: "border-box",
+                  background: "#0c0e12",
+                  border: "1px solid rgba(64,71,83,0.6)",
+                  borderRadius: 14,
+                  padding: "12px 14px",
+                  color: "#e2e2e8",
+                  fontSize: "0.875rem",
+                  fontFamily: "'Inter',sans-serif",
+                  resize: "none",
+                  outline: "none",
+                  transition: "border-color 0.15s ease",
+                }}
+                onFocus={(e) => (e.target.style.borderColor = "rgba(163,201,255,0.4)")}
+                onBlur={(e) => (e.target.style.borderColor = "rgba(64,71,83,0.6)")}
+              />
+            </div>
+          </div>
         </DialogContent>
-        <DialogActions>
-          <Button disabled={markPaidMutation.isPending} onClick={() => setPaymentTarget(null)}>
-            ביטול
-          </Button>
-          <Button
-            variant="contained"
+
+        <DialogActions sx={{ px: 3, pb: 3, pt: 0.5, flexDirection: "column", gap: 1 }}>
+          <button
+            className="btn-primary"
             disabled={markPaidMutation.isPending || !paymentTarget}
             onClick={() => {
               if (!paymentTarget) return;
@@ -558,14 +617,35 @@ export function MainDashboardPage() {
               });
             }}
           >
-            אישור
-          </Button>
+            {markPaidMutation.isPending ? "מעדכן..." : "אישור"}
+          </button>
+          <button
+            disabled={markPaidMutation.isPending}
+            onClick={() => setPaymentTarget(null)}
+            style={{
+              width: "100%",
+              padding: "0.75rem",
+              fontFamily: "'Manrope',sans-serif",
+              fontWeight: 600,
+              fontSize: "0.875rem",
+              color: "rgba(192,199,213,0.6)",
+              background: "none",
+              border: "none",
+              cursor: "pointer",
+              transition: "color 0.15s ease",
+            }}
+            onMouseEnter={(e) => (e.currentTarget.style.color = "#e2e2e8")}
+            onMouseLeave={(e) => (e.currentTarget.style.color = "rgba(192,199,213,0.6)")}
+          >
+            ביטול
+          </button>
         </DialogActions>
       </Dialog>
 
+      {/* ── Create / Edit Lesson Dialog ────────────────────────── */}
       <Dialog open={dialogOpen} onClose={() => setDialogOpen(false)} fullWidth maxWidth="sm">
         <DialogTitle>{dialogMode === "create" ? "הוספת שיעור" : "עריכת שיעור"}</DialogTitle>
-        <DialogContent sx={{ display: "grid", gap: 2, pt: "12px !important" }}>
+        <DialogContent sx={{ display: "flex", flexDirection: "column", gap: 2, pt: "12px !important" }}>
           {formError && dialogOpen ? <Alert severity="error">{formError}</Alert> : null}
 
           <Autocomplete
@@ -574,10 +654,7 @@ export function MainDashboardPage() {
             filterSelectedOptions
             options={mergedParticipantOptions}
             value={selectedParticipants}
-            onChange={(_, value) => {
-              setSelectedParticipants(value);
-              setParticipantSearch("");
-            }}
+            onChange={(_, value) => { setSelectedParticipants(value); setParticipantSearch(""); }}
             inputValue={participantSearch}
             onInputChange={(_, value, reason) => {
               if (reason === "input" || reason === "clear") setParticipantSearch(value);
@@ -592,7 +669,7 @@ export function MainDashboardPage() {
                 {...params}
                 label="תלמידים (חובה)"
                 placeholder="הקלידו לחיפוש ובחרו מהרשימה"
-                helperText="בחרו תלמיד אחד או יותר מהרשימה"
+                helperText="בחרו תלמיד אחד או יותר"
                 InputProps={{
                   ...params.InputProps,
                   endAdornment: (
@@ -639,10 +716,14 @@ export function MainDashboardPage() {
             label="שיעור פרונטלי (ניווט Waze)"
           />
         </DialogContent>
-        <DialogActions>
-          <Button onClick={() => setDialogOpen(false)}>ביטול</Button>
-          <Button
-            variant="contained"
+
+        <DialogActions sx={{ px: 3, pb: 3, pt: 1, gap: 1 }}>
+          <button className="btn-outline-sm" style={{ padding: "0.6rem 1.25rem" }} onClick={() => setDialogOpen(false)}>
+            ביטול
+          </button>
+          <button
+            className="btn-primary-sm"
+            style={{ flex: 1, padding: "0.6rem 1rem" }}
             disabled={!canSubmit || createLessonMutation.isPending || updateLessonMutation.isPending}
             onClick={() => {
               setFormError(null);
@@ -653,7 +734,6 @@ export function MainDashboardPage() {
                 studentIds: selectedParticipants.map((s) => s.id),
                 isInPerson,
               };
-
               if (dialogMode === "create") {
                 createLessonMutation.mutate(payload);
               } else {
@@ -662,9 +742,9 @@ export function MainDashboardPage() {
             }}
           >
             {dialogMode === "create" ? "צור שיעור" : "שמור שינויים"}
-          </Button>
+          </button>
         </DialogActions>
       </Dialog>
-    </Box>
+    </div>
   );
 }
