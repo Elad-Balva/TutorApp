@@ -1,4 +1,5 @@
 ﻿using Microsoft.AspNetCore.Mvc;
+using TutorApp.Application.DTOs.Common;
 using TutorApp.Application.DTOs.Students;
 using TutorApp.Application.Interfaces;
 
@@ -34,5 +35,19 @@ public class StudentsController : ControllerBase
     {
         var options = await _studentService.GetStudentOptionsAsync(search, ct);
         return Ok(options);
+    }
+
+    [HttpGet]
+    public async Task<IActionResult> GetStudents([FromQuery] string? search, [FromQuery] int page = 1, [FromQuery] int pageSize = 20, CancellationToken ct = default)
+    {
+        var result = await _studentService.GetStudentsAsync(search, page, pageSize, ct);
+        return Ok(result);
+    }
+
+    [HttpPut("{studentId:guid}")]
+    public async Task<IActionResult> UpdateStudent(Guid studentId, [FromBody] UpdateStudentRequest request, CancellationToken ct)
+    {
+        await _studentService.UpdateStudentAsync(studentId, request, ct);
+        return NoContent();
     }
 }

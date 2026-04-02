@@ -1,10 +1,11 @@
-﻿using System.ComponentModel.DataAnnotations;
+using System.ComponentModel.DataAnnotations;
 
 namespace TutorApp.Application.DTOs.Lessons;
 
-public record CreateLessonRequest(
-    [Required] DateTimeOffset StartTime,
+public record UpdateLessonRequest(
     [Required, MaxLength(120)] string Subject,
+    [Required] DateTimeOffset StartTime,
     [Range(typeof(decimal), "0.01", "24")] decimal ExpectedDurationInHours,
-    List<Guid> StudentIds
+    [Required] List<Guid> StudentIds
 );
+

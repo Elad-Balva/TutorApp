@@ -9,8 +9,9 @@ using TutorApp.Infrastructure.Services;
 
 var builder = WebApplication.CreateBuilder(args);
 
-var frontendOrigin = builder.Configuration["Cors:FrontendOrigin"]
-    ?? throw new InvalidOperationException("Cors:FrontendOrigin is required");
+var frontendOrigins = builder.Configuration.GetSection("Cors:FrontendOrigins").Get<string[]>();
+if (frontendOrigins is null || frontendOrigins.Length == 0)
+    throw new InvalidOperationException("Cors:FrontendOrigins is required");
 
 builder.Services.AddDbContext<AppDbContext>(options =>
     options.UseNpgsql(builder.Configuration.GetConnectionString("DefaultConnection"))
@@ -29,7 +30,7 @@ builder.Services.AddCors(options =>
 {
     options.AddPolicy("FrontendOnly", policy =>
     {
-        policy.WithOrigins(frontendOrigin)
+        policy.WithOrigins(frontendOrigins)
             .WithMethods("GET", "POST", "PUT", "DELETE")
             .AllowAnyHeader();
     });
@@ -66,7 +67,9 @@ if (app.Environment.IsDevelopment())
     app.UseSwaggerUI();
 }
 
-app.UseHttpsRedirection();
+if (!app.Environment.IsDevelopment())
+    app.UseHttpsRedirection();
+
 app.UseCors("FrontendOnly");
 app.UseRateLimiter();
 

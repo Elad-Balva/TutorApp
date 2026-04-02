@@ -8,4 +8,6 @@ public interface ILessonService
     Task AddParticipantsAsync(Guid lessonId, AddParticipantsRequest request, CancellationToken ct);
     Task CompleteLessonAsync(Guid lessonId, CompleteLessonRequest request, CancellationToken ct);
     Task<LessonsDashboardDto> GetDashboardAsync(CancellationToken ct);
+    Task<List<LessonReadyToCompleteDto>> GetReadyToCompleteLessonsAsync(CancellationToken ct);
+    Task UpdateLessonAsync(Guid lessonId, UpdateLessonRequest request, CancellationToken ct);
 }

@@ -5,14 +5,14 @@ export function ParticipantEditorRow({ row, onChange }) {
     <Box sx={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 1 }}>
       <Typography sx={{ alignSelf: "center", minHeight: 44 }}>{row.studentName}</Typography>
       <TextField
-        label="Price / hour"
+        label="מחיר לשעה (₪)"
         type="number"
         value={row.hourlyPrice}
         inputProps={{ min: 0, step: 0.5 }}
         onChange={(e) => onChange({ ...row, hourlyPrice: Number(e.target.value) })}
       />
       <TextField
-        label="Duration (hours)"
+        label="משך (שעות)"
         type="number"
         value={row.durationInHours}
         inputProps={{ min: 0.25, max: 24, step: 0.25 }}

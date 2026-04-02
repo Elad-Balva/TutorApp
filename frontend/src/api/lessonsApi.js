@@ -9,11 +9,31 @@ export const getLessonsDashboard = async () => {
   return response.data;
 };
 
-export const createLesson = async ({ startTime, subject, studentIds }) => {
+export const getReadyToCompleteLessons = async () => {
+  const response = await axiosClient.get("/api/lessons/ready-to-complete");
+  return response.data;
+};
+
+export const createLesson = async ({
+  startTime,
+  subject,
+  expectedDurationInHours,
+  studentIds,
+}) => {
   const response = await axiosClient.post("/api/lessons", {
     startTime,
     subject,
+    expectedDurationInHours,
     studentIds,
   });
   return response.data;
+};
+
+export const updateLesson = async (lessonId, { startTime, subject, expectedDurationInHours, studentIds }) => {
+  await axiosClient.put(`/api/lessons/${lessonId}`, {
+    startTime,
+    subject,
+    expectedDurationInHours,
+    studentIds,
+  });
 };

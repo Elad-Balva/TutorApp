@@ -53,6 +53,10 @@ public class AppDbContext : DbContext, IAppDbContext
         {
             e.HasKey(x => x.Id);
             e.Property(x => x.Subject).HasMaxLength(120).IsRequired();
+            e.Property(x => x.ExpectedDurationInHours)
+                .HasPrecision(10, 2)
+                .HasDefaultValue(1.00m)
+                .IsRequired();
 
             e.HasIndex(x => x.TeacherId);
             e.HasQueryFilter(x => x.TeacherId == _currentTeacherService.TeacherId);

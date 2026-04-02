@@ -20,3 +20,19 @@ export const createStudent = async ({ name, phoneNumber, baseHourlyPrice }) => {
   });
   return response.data;
 };
+
+export const getStudents = async ({ search, page = 1, pageSize = 20 }) => {
+  const params = { page, pageSize };
+  if (search && search.trim()) params.search = search.trim();
+  const response = await axiosClient.get("/api/students", { params });
+  return response.data;
+};
+
+export const updateStudent = async (studentId, { name, phoneNumber, baseHourlyPrice, isActive }) => {
+  await axiosClient.put(`/api/students/${studentId}`, {
+    name,
+    phoneNumber,
+    baseHourlyPrice,
+    isActive,
+  });
+};

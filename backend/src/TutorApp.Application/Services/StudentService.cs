@@ -1,5 +1,6 @@
 ﻿using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging;
+using TutorApp.Application.DTOs.Common;
 using TutorApp.Application.DTOs.Students;
 using TutorApp.Application.Interfaces;
 using TutorApp.Domain.Entities;
@@ -87,5 +88,53 @@ public class StudentService : IStudentService
             Email = "teacher@tutorapp.local"
         });
         await _db.SaveChangesAsync(ct);
+    }
+
+    public async Task<PagedResult<StudentListItemDto>> GetStudentsAsync(string? search, int page, int pageSize, CancellationToken ct)
+    {
+        page = page < 1 ? 1 : page;
+        pageSize = pageSize < 1 ? 10 : pageSize;
+        pageSize = pageSize > 50 ? 50 : pageSize;
+
+        var query = _db.Students.AsQueryable();
+
+        if (!string.IsNullOrWhiteSpace(search))
+        {
+            var term = search.Trim().ToLowerInvariant();
+            query = query.Where(x => x.Name.ToLower().Contains(term));
+        }
+
+        var totalCount = await query.CountAsync(ct);
+        var items = await query
+            .OrderBy(x => x.Name)
+            .Skip((page - 1) * pageSize)
+            .Take(pageSize)
+            .Select(x => new StudentListItemDto(
+                x.Id,
+                x.Name,
+                x.PhoneNumber,
+                x.IsActive,
+                x.BaseHourlyPrice
+            ))
+            .ToListAsync(ct);
+
+        return new PagedResult<StudentListItemDto>(items, page, pageSize, totalCount);
+    }
+
+    public async Task UpdateStudentAsync(Guid studentId, UpdateStudentRequest request, CancellationToken ct)
+    {
+        await EnsureTeacherExistsAsync(ct);
+
+        var student = await _db.Students
+            .FirstOrDefaultAsync(s => s.Id == studentId, ct)
+            ?? throw new KeyNotFoundException("Student not found");
+
+        student.Name = request.Name.Trim();
+        student.PhoneNumber = string.IsNullOrWhiteSpace(request.PhoneNumber) ? null : request.PhoneNumber.Trim();
+        student.BaseHourlyPrice = request.BaseHourlyPrice;
+        student.IsActive = request.IsActive;
+
+        await _db.SaveChangesAsync(ct);
+        _logger.LogInformation("Student {StudentId} updated for teacher {TeacherId}", studentId, _currentTeacher.TeacherId);
     }
 }

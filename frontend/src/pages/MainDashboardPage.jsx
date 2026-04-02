@@ -7,38 +7,48 @@ import {
   Button,
   Card,
   CardContent,
+  Chip,
   CircularProgress,
+  Collapse,
   Dialog,
   DialogActions,
   DialogContent,
   DialogTitle,
   Fab,
   List,
-  ListItem,
-  ListItemText,
   TextField,
   Typography,
 } from "@mui/material";
-import { createLesson, getLessonsDashboard } from "../api/lessonsApi";
+import { createLesson, getLessonsDashboard, updateLesson } from "../api/lessonsApi";
 import { getStudentOptions } from "../api/studentsApi";
 import { useDebouncedValue } from "../hooks/useDebouncedValue";
 
+const SUBJECT_SUGGESTIONS = ["c#", "java", "פרויקט תכנות", "מתמטיקה", "אנגלית", "פיזיקה"];
+
 const formatDate = (utc) =>
-  new Date(utc).toLocaleString("he-IL", {
-    dateStyle: "short",
-    timeStyle: "short",
-  });
+  new Date(utc).toLocaleString("he-IL", { dateStyle: "short", timeStyle: "short" });
 
 const formatIls = (value) => `₪${Number(value || 0).toFixed(2)}`;
 
-export function MainDashboardPage() {
-  const [open, setOpen] = useState(false);
-  const [subject, setSubject] = useState("");
-  const [startTime, setStartTime] = useState("");
-  const [participantSearch, setParticipantSearch] = useState("");
-  const [selectedParticipants, setSelectedParticipants] = useState([]);
+const toDateTimeLocal = (utcIso) => {
+  const d = new Date(utcIso);
+  const pad = (n) => String(n).padStart(2, "0");
+  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
+};
 
-  const debouncedParticipantSearch = useDebouncedValue(participantSearch, 300);
+export function MainDashboardPage() {
+  const [dialogOpen, setDialogOpen] = useState(false);
+  const [dialogMode, setDialogMode] = useState("create"); // create | edit
+  const [editingLessonId, setEditingLessonId] = useState(null);
+
+  const [subjectInput, setSubjectInput] = useState("");
+  const [startTimeInput, setStartTimeInput] = useState("");
+  const [expectedDurationInHours, setExpectedDurationInHours] = useState("1");
+  const [participantSearch, setParticipantSearch] = useState("");
+  const [selectedParticipants, setSelectedParticipants] = useState([]); // [{id,name}]
+
+  const [expandedFutureLessonId, setExpandedFutureLessonId] = useState(null);
+
   const queryClient = useQueryClient();
 
   const dashboardQuery = useQuery({
@@ -46,10 +56,11 @@ export function MainDashboardPage() {
     queryFn: getLessonsDashboard,
   });
 
+  const debouncedParticipantSearch = useDebouncedValue(participantSearch, 300);
   const studentOptionsQuery = useQuery({
     queryKey: ["studentOptions", debouncedParticipantSearch],
     queryFn: () => getStudentOptions(debouncedParticipantSearch),
-    enabled: open,
+    enabled: dialogOpen,
   });
 
   const mergedParticipantOptions = useMemo(() => {
@@ -62,104 +73,207 @@ export function MainDashboardPage() {
   const createLessonMutation = useMutation({
     mutationFn: createLesson,
     onSuccess: () => {
-      setOpen(false);
-      setSubject("");
-      setStartTime("");
+      setDialogOpen(false);
+      setSubjectInput("");
+      setStartTimeInput("");
+      setExpectedDurationInHours("1");
       setParticipantSearch("");
       setSelectedParticipants([]);
+      setExpandedFutureLessonId(null);
       queryClient.invalidateQueries({ queryKey: ["lessonsDashboard"] });
     },
   });
 
-  const canSubmit = useMemo(
-    () => subject.trim().length > 0 && startTime && selectedParticipants.length > 0,
-    [subject, startTime, selectedParticipants]
-  );
+  const updateLessonMutation = useMutation({
+    mutationFn: ({ lessonId, payload }) => updateLesson(lessonId, payload),
+    onSuccess: () => {
+      setDialogOpen(false);
+      setEditingLessonId(null);
+      setExpandedFutureLessonId(null);
+      queryClient.invalidateQueries({ queryKey: ["lessonsDashboard"] });
+      queryClient.invalidateQueries({ queryKey: ["readyToCompleteLessons"] });
+    },
+  });
 
-  const openDialog = () => {
+  const canSubmit = useMemo(() => {
+    const expected = Number(expectedDurationInHours);
+    return (
+      subjectInput.trim().length > 0 &&
+      Boolean(startTimeInput) &&
+      selectedParticipants.length > 0 &&
+      !Number.isNaN(expected) &&
+      expected > 0 &&
+      expected <= 24
+    );
+  }, [subjectInput, startTimeInput, selectedParticipants, expectedDurationInHours]);
+
+  const openCreateDialog = () => {
+    setDialogMode("create");
+    setEditingLessonId(null);
+    setSubjectInput("");
+    setStartTimeInput(toDateTimeLocal(new Date(Date.now() + 60 * 60 * 1000).toISOString()));
+    setExpectedDurationInHours("1");
     setParticipantSearch("");
-    setOpen(true);
+    setSelectedParticipants([]);
+    setDialogOpen(true);
+  };
+
+  const openEditDialog = (lesson) => {
+    setDialogMode("edit");
+    setEditingLessonId(lesson.lessonId);
+    setSubjectInput(lesson.subject || "");
+    setStartTimeInput(toDateTimeLocal(lesson.startTime));
+    setExpectedDurationInHours(String(lesson.expectedDurationInHours || 1));
+    setParticipantSearch("");
+    setSelectedParticipants((lesson.participants || []).map((p) => ({ id: p.studentId, name: p.studentName })));
+    setDialogOpen(true);
   };
 
   return (
-    <Box sx={{ p: 2, pb: 10, display: "grid", gap: 2 }}>
-      <Typography variant="h5" fontWeight={600}>
-        Dashboard
+    <Box sx={{ p: 2, pb: 10, display: "grid", gap: 2 }} dir="rtl">
+      <Typography variant="h5" fontWeight={800}>
+        לוח בקרה
       </Typography>
 
       {dashboardQuery.error ? <Alert severity="error">{dashboardQuery.error.message}</Alert> : null}
 
-      <Card>
-        <CardContent>
-          <Typography variant="h6" gutterBottom>
-            Future Lessons
-          </Typography>
-          <List dense disablePadding>
-            {(dashboardQuery.data?.futureLessons || []).map((lesson) => (
-              <ListItem key={lesson.lessonId} disableGutters>
-                <ListItemText
-                  primary={lesson.subject}
-                  secondary={`${formatDate(lesson.startTime)} | ${lesson.participantCount} students`}
-                />
-              </ListItem>
-            ))}
-            {!dashboardQuery.isLoading && (dashboardQuery.data?.futureLessons || []).length === 0 ? (
-              <Typography variant="body2" color="text.secondary">
-                No future lessons.
-              </Typography>
-            ) : null}
-          </List>
-        </CardContent>
-      </Card>
+      <Typography variant="h6" fontWeight={700} sx={{ mt: 1 }}>
+        שיעורים עתידיים
+      </Typography>
+      <List disablePadding sx={{ display: "grid", gap: 1 }}>
+        {(dashboardQuery.data?.futureLessons || []).map((lesson) => {
+          const isExpanded = expandedFutureLessonId === lesson.lessonId;
+          return (
+            <Card
+              key={lesson.lessonId}
+              variant="outlined"
+              sx={{
+                cursor: "pointer",
+                transition: "transform 180ms ease, box-shadow 180ms ease",
+                "&:hover": { transform: "translateY(-2px)", boxShadow: 2 },
+              }}
+              onClick={() => setExpandedFutureLessonId((prev) => (prev === lesson.lessonId ? null : lesson.lessonId))}
+            >
+              <CardContent>
+                <Typography variant="subtitle1" fontWeight={800}>
+                  {lesson.subject}
+                </Typography>
+                <Typography variant="body2" color="text.secondary">
+                  {formatDate(lesson.startTime)} | משך צפוי: {lesson.expectedDurationInHours} שעות
+                </Typography>
 
-      <Card>
-        <CardContent>
-          <Typography variant="h6" gutterBottom>
-            Currently Unpaid Lessons
-          </Typography>
-          <List dense disablePadding>
-            {(dashboardQuery.data?.unpaidLessons || []).map((lesson) => (
-              <ListItem key={lesson.lessonId} disableGutters>
-                <ListItemText
-                  primary={lesson.subject}
-                  secondary={`${formatDate(lesson.startTime)} | Outstanding: ${formatIls(lesson.totalPrice)}`}
-                />
-              </ListItem>
-            ))}
-            {!dashboardQuery.isLoading && (dashboardQuery.data?.unpaidLessons || []).length === 0 ? (
-              <Typography variant="body2" color="text.secondary">
-                No unpaid lessons.
-              </Typography>
-            ) : null}
-          </List>
-        </CardContent>
-      </Card>
+                <Collapse in={isExpanded} timeout={240} unmountOnExit>
+                  <Box sx={{ mt: 1, display: "grid", gap: 1 }}>
+                    <Typography variant="body2" fontWeight={700}>
+                      תלמידים בשיעור
+                    </Typography>
+                    <Box sx={{ display: "flex", flexWrap: "wrap", gap: 1 }}>
+                      {(lesson.participants || []).map((p) => (
+                        <Chip key={p.studentId} label={p.studentName} size="small" sx={{ direction: "rtl" }} />
+                      ))}
+                    </Box>
 
-      <Fab
-        color="primary"
-        aria-label="add lesson"
-        onClick={openDialog}
-        sx={{ position: "fixed", right: 16, bottom: 16 }}
-      >
+                    <Button
+                      variant="contained"
+                      size="small"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        openEditDialog(lesson);
+                      }}
+                    >
+                      ערוך
+                    </Button>
+                  </Box>
+                </Collapse>
+              </CardContent>
+            </Card>
+          );
+        })}
+
+        {!dashboardQuery.isLoading && (dashboardQuery.data?.futureLessons || []).length === 0 ? (
+          <Typography variant="body2" color="text.secondary">
+            אין שיעורים עתידיים
+          </Typography>
+        ) : null}
+      </List>
+
+      <Typography variant="h6" fontWeight={700} sx={{ mt: 2 }}>
+        שיעורים שטרם שולמו
+      </Typography>
+      <List disablePadding sx={{ display: "grid", gap: 1 }}>
+        {(dashboardQuery.data?.unpaidLessons || []).map((lesson) => {
+          const unpaidParticipants = (lesson.participants || []).filter((p) => !p.isPaid && p.outstandingAmount > 0);
+          return (
+            <Card key={lesson.lessonId} variant="outlined">
+              <CardContent sx={{ animation: "fadeInUp 260ms ease both" }}>
+                <Typography variant="subtitle1" fontWeight={800}>
+                  {lesson.subject}
+                </Typography>
+                <Typography variant="body2" color="text.secondary">
+                  {formatDate(lesson.startTime)} | יתרה: {formatIls(lesson.outstandingTotal)}
+                </Typography>
+
+                <Box sx={{ mt: 1 }}>
+                  <Typography variant="body2" fontWeight={700}>
+                    תלמידים שלא שילמו
+                  </Typography>
+                  {unpaidParticipants.length === 0 ? (
+                    <Typography variant="body2" color="text.secondary">
+                      הכל שולם
+                    </Typography>
+                  ) : (
+                    <Box sx={{ display: "grid", gap: 0.5, mt: 0.5 }}>
+                      {unpaidParticipants.map((p) => (
+                        <Typography key={p.studentId} variant="body2">
+                          {p.studentName}: {formatIls(p.outstandingAmount)}
+                        </Typography>
+                      ))}
+                    </Box>
+                  )}
+                </Box>
+              </CardContent>
+            </Card>
+          );
+        })}
+
+        {!dashboardQuery.isLoading && (dashboardQuery.data?.unpaidLessons || []).length === 0 ? (
+          <Typography variant="body2" color="text.secondary">
+            אין יתרות לתשלום
+          </Typography>
+        ) : null}
+      </List>
+
+      <Fab color="primary" aria-label="add lesson" onClick={openCreateDialog} sx={{ position: "fixed", right: 16, bottom: 16 }}>
         +
       </Fab>
 
-      <Dialog open={open} onClose={() => setOpen(false)} fullWidth maxWidth="sm">
-        <DialogTitle>Add Lesson</DialogTitle>
+      <Dialog open={dialogOpen} onClose={() => setDialogOpen(false)} fullWidth maxWidth="sm">
+        <DialogTitle>{dialogMode === "create" ? "הוספת שיעור" : "עריכת שיעור"}</DialogTitle>
         <DialogContent sx={{ display: "grid", gap: 2, pt: "12px !important" }}>
-          <TextField
-            label="Subject"
-            value={subject}
-            onChange={(e) => setSubject(e.target.value)}
-            inputProps={{ maxLength: 120 }}
+          <Autocomplete
+            freeSolo
+            options={SUBJECT_SUGGESTIONS}
+            value={subjectInput}
+            onInputChange={(_, value) => setSubjectInput(value || "")}
+            renderInput={(params) => <TextField {...params} label="נושא" inputProps={{ maxLength: 120 }} />}
           />
+
           <TextField
-            label="Date and time"
+            label="תאריך ושעה"
             type="datetime-local"
-            value={startTime}
-            onChange={(e) => setStartTime(e.target.value)}
+            value={startTimeInput}
+            onChange={(e) => setStartTimeInput(e.target.value)}
             InputLabelProps={{ shrink: true }}
           />
+
+          <TextField
+            label="משך צפוי (שעות)"
+            type="number"
+            value={expectedDurationInHours}
+            onChange={(e) => setExpectedDurationInHours(e.target.value)}
+            inputProps={{ min: 0.01, max: 24, step: 0.25 }}
+          />
+
           <Autocomplete
             multiple
             options={mergedParticipantOptions}
@@ -173,12 +287,12 @@ export function MainDashboardPage() {
             isOptionEqualToValue={(a, b) => a.id === b.id}
             filterOptions={(options) => options}
             loading={studentOptionsQuery.isFetching}
-            noOptionsText={studentOptionsQuery.isFetching ? "Searching…" : "No students match"}
+            noOptionsText={studentOptionsQuery.isFetching ? "מחפש..." : "אין התאמות"}
             renderInput={(params) => (
               <TextField
                 {...params}
-                label="Participants"
-                placeholder="Type to search students"
+                label="תלמידים"
+                placeholder="חיפוש תלמידים"
                 InputProps={{
                   ...params.InputProps,
                   endAdornment: (
@@ -193,19 +307,26 @@ export function MainDashboardPage() {
           />
         </DialogContent>
         <DialogActions>
-          <Button onClick={() => setOpen(false)}>Cancel</Button>
+          <Button onClick={() => setDialogOpen(false)}>ביטול</Button>
           <Button
             variant="contained"
-            disabled={!canSubmit || createLessonMutation.isPending}
-            onClick={() =>
-              createLessonMutation.mutate({
-                subject: subject.trim(),
-                startTime: new Date(startTime).toISOString(),
+            disabled={!canSubmit || createLessonMutation.isPending || updateLessonMutation.isPending}
+            onClick={() => {
+              const payload = {
+                subject: subjectInput.trim(),
+                startTime: new Date(startTimeInput).toISOString(),
+                expectedDurationInHours: Number(expectedDurationInHours),
                 studentIds: selectedParticipants.map((s) => s.id),
-              })
-            }
+              };
+
+              if (dialogMode === "create") {
+                createLessonMutation.mutate(payload);
+              } else {
+                updateLessonMutation.mutate({ lessonId: editingLessonId, payload });
+              }
+            }}
           >
-            Create Lesson
+            {dialogMode === "create" ? "צור שיעור" : "שמור שינויים"}
           </Button>
         </DialogActions>
       </Dialog>

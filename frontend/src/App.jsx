@@ -14,25 +14,10 @@ import {
 } from "@mui/material";
 import { MainDashboardPage } from "./pages/MainDashboardPage";
 import { LessonCompletionPage } from "./pages/LessonCompletionPage";
-import { AddStudentPage } from "./pages/AddStudentPage";
+import { StudentsPage } from "./pages/StudentsPage";
 import "./App.css";
 
 const queryClient = new QueryClient();
-
-const demoParticipants = [
-  {
-    studentId: "aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa",
-    studentName: "Demo Student",
-    hourlyPrice: 50,
-    durationInHours: 1,
-  },
-  {
-    studentId: "bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb",
-    studentName: "Second Student",
-    hourlyPrice: 45,
-    durationInHours: 1.5,
-  },
-];
 
 function App() {
   const [openMenu, setOpenMenu] = useState(false);
@@ -60,7 +45,7 @@ function App() {
                 setOpenMenu(false);
               }}
             >
-              <ListItemText primary="Dashboard" />
+              <ListItemText primary="לוח בקרה" />
             </ListItemButton>
             <ListItemButton
               selected={activePage === "completeLesson"}
@@ -69,31 +54,30 @@ function App() {
                 setOpenMenu(false);
               }}
             >
-              <ListItemText primary="Complete Lesson" />
+              <ListItemText primary="סיום שיעור" />
             </ListItemButton>
             <ListItemButton
-              selected={activePage === "addStudent"}
+              selected={activePage === "students"}
               onClick={() => {
-                setActivePage("addStudent");
+                setActivePage("students");
                 setOpenMenu(false);
               }}
             >
-              <ListItemText primary="Add Student" />
+              <ListItemText primary="תלמידים" />
             </ListItemButton>
           </List>
         </Box>
       </Drawer>
 
-      {activePage === "dashboard" ? (
-        <MainDashboardPage />
-      ) : activePage === "addStudent" ? (
-        <AddStudentPage />
-      ) : (
-        <LessonCompletionPage
-          lessonId="cccccccc-cccc-cccc-cccc-cccccccccccc"
-          initialParticipants={demoParticipants}
-        />
-      )}
+      <Box dir="rtl">
+        {activePage === "dashboard" ? (
+          <MainDashboardPage />
+        ) : activePage === "students" ? (
+          <StudentsPage />
+        ) : (
+          <LessonCompletionPage />
+        )}
+      </Box>
     </QueryClientProvider>
   );
 }

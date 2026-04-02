@@ -27,6 +27,7 @@ public class LessonService : ILessonService
             TeacherId = _currentTeacher.TeacherId,
             StartTime = request.StartTime.ToUniversalTime(),
             Subject = request.Subject,
+            ExpectedDurationInHours = request.ExpectedDurationInHours,
             Status = LessonStatus.Scheduled
         };
 
@@ -43,7 +44,7 @@ public class LessonService : ILessonService
                 StudentId = student.Id,
                 TeacherId = _currentTeacher.TeacherId,
                 HourlyPrice = student.BaseHourlyPrice,
-                DurationInHours = 1.00m,
+                DurationInHours = request.ExpectedDurationInHours,
                 TotalPrice = 0m
             });
         }
@@ -78,7 +79,7 @@ public class LessonService : ILessonService
                 StudentId = student.Id,
                 TeacherId = _currentTeacher.TeacherId,
                 HourlyPrice = student.BaseHourlyPrice,
-                DurationInHours = 1.00m,
+                DurationInHours = lesson.ExpectedDurationInHours,
                 TotalPrice = 0m
             });
         }
@@ -122,60 +123,222 @@ public class LessonService : ILessonService
     {
         var now = DateTimeOffset.UtcNow;
 
-        var futureLessons = await _db.Lessons
+        var futureLessonRows = await _db.Lessons
             .Where(x => x.Status == LessonStatus.Scheduled && x.StartTime > now)
             .OrderBy(x => x.StartTime)
-            .Select(x => new LessonDashboardItemDto(
-                x.Id,
-                x.StartTime,
-                x.Subject,
-                x.Status.ToString(),
-                x.Participants.Count(),
-                0m
-            ))
             .Take(50)
-            .ToListAsync(ct);
-
-        var completed = await _db.Lessons
-            .Where(x => x.Status == LessonStatus.Completed)
             .Select(x => new
             {
                 x.Id,
                 x.StartTime,
                 x.Subject,
-                Status = x.Status.ToString(),
-                ParticipantCount = x.Participants.Count(),
-                TotalPrice = x.Participants.Sum(p => p.TotalPrice)
+                x.ExpectedDurationInHours
             })
+            .ToListAsync(ct);
+
+        var futureLessons = new List<LessonDashboardItemDto>(futureLessonRows.Count);
+        foreach (var lesson in futureLessonRows)
+        {
+            var participants = await _db.LessonParticipants
+                .Where(lp => lp.LessonId == lesson.Id)
+                .Select(lp => new LessonParticipantDashboardItemDto(
+                    lp.StudentId,
+                    lp.Student.Name,
+                    lp.HourlyPrice,
+                    lp.DurationInHours,
+                    lp.TotalPrice,
+                    false,
+                    0m
+                ))
+                .ToListAsync(ct);
+
+            var totalPrice = participants.Sum(p => p.TotalPrice);
+
+            futureLessons.Add(new LessonDashboardItemDto(
+                lesson.Id,
+                lesson.StartTime,
+                lesson.Subject,
+                LessonStatus.Scheduled.ToString(),
+                lesson.ExpectedDurationInHours,
+                participants,
+                totalPrice,
+                0m
+            ));
+        }
+
+        var completedLessonRows = await _db.Lessons
+            .Where(x => x.Status == LessonStatus.Completed)
             .OrderByDescending(x => x.StartTime)
             .Take(100)
+            .Select(x => new
+            {
+                x.Id,
+                x.StartTime,
+                x.Subject
+            })
             .ToListAsync(ct);
 
         var unpaidLessons = new List<LessonDashboardItemDto>();
-        foreach (var lesson in completed)
+        foreach (var lesson in completedLessonRows)
         {
-            var participantStudentIds = await _db.LessonParticipants
+            var participants = await _db.LessonParticipants
                 .Where(lp => lp.LessonId == lesson.Id)
-                .Select(lp => lp.StudentId)
+                .Select(lp => new
+                {
+                    lp.StudentId,
+                    lp.Student.Name,
+                    lp.HourlyPrice,
+                    lp.DurationInHours,
+                    lp.TotalPrice
+                })
                 .ToListAsync(ct);
 
-            var paid = await _db.Payments
-                .Where(p => participantStudentIds.Contains(p.StudentId))
-                .SumAsync(p => (decimal?)p.Amount, ct) ?? 0m;
+            var unpaidTotal = 0m;
+            var participantDashboard = new List<LessonParticipantDashboardItemDto>(participants.Count);
 
-            var unpaidAmount = decimal.Round(lesson.TotalPrice - paid, 2);
-            if (unpaidAmount <= 0) continue;
+            foreach (var p in participants)
+            {
+                // MVP assumption: payments made up to the lesson start cover this lesson.
+                var paid = await _db.Payments
+                    .Where(pay => pay.StudentId == p.StudentId && pay.PaymentDate <= lesson.StartTime)
+                    .SumAsync(pay => (decimal?)pay.Amount, ct) ?? 0m;
+
+                var outstanding = decimal.Round(Math.Max(0m, p.TotalPrice - paid), 2);
+                var isPaid = outstanding <= 0m;
+                unpaidTotal += outstanding;
+
+                participantDashboard.Add(new LessonParticipantDashboardItemDto(
+                    p.StudentId,
+                    p.Name,
+                    p.HourlyPrice,
+                    p.DurationInHours,
+                    p.TotalPrice,
+                    isPaid,
+                    outstanding
+                ));
+            }
+
+            unpaidTotal = decimal.Round(unpaidTotal, 2);
+            if (unpaidTotal <= 0m) continue;
 
             unpaidLessons.Add(new LessonDashboardItemDto(
                 lesson.Id,
                 lesson.StartTime,
                 lesson.Subject,
-                lesson.Status,
-                lesson.ParticipantCount,
-                unpaidAmount
+                LessonStatus.Completed.ToString(),
+                0m,
+                participantDashboard,
+                participants.Sum(p => p.TotalPrice),
+                unpaidTotal
             ));
         }
 
         return new LessonsDashboardDto(futureLessons, unpaidLessons);
+    }
+
+    public async Task<List<LessonReadyToCompleteDto>> GetReadyToCompleteLessonsAsync(CancellationToken ct)
+    {
+        var now = DateTimeOffset.UtcNow;
+
+        var lessons = await _db.Lessons
+            .Where(x => x.Status == LessonStatus.Scheduled && x.StartTime <= now)
+            .OrderByDescending(x => x.StartTime)
+            .Take(100)
+            .Select(x => new
+            {
+                x.Id,
+                x.StartTime,
+                x.Subject,
+                x.ExpectedDurationInHours
+            })
+            .ToListAsync(ct);
+
+        var result = new List<LessonReadyToCompleteDto>(lessons.Count);
+        foreach (var lesson in lessons)
+        {
+            var participants = await _db.LessonParticipants
+                .Where(lp => lp.LessonId == lesson.Id)
+                .Select(lp => new LessonReadyToCompleteParticipantDto(
+                    lp.StudentId,
+                    lp.Student.Name,
+                    lp.HourlyPrice,
+                    lp.DurationInHours
+                ))
+                .ToListAsync(ct);
+
+            result.Add(new LessonReadyToCompleteDto(
+                lesson.Id,
+                lesson.StartTime,
+                lesson.Subject,
+                lesson.ExpectedDurationInHours,
+                participants
+            ));
+        }
+
+        return result;
+    }
+
+    public async Task UpdateLessonAsync(Guid lessonId, UpdateLessonRequest request, CancellationToken ct)
+    {
+        var lesson = await _db.Lessons
+            .FirstOrDefaultAsync(x => x.Id == lessonId, ct)
+            ?? throw new KeyNotFoundException("Lesson not found");
+
+        if (lesson.Status != LessonStatus.Scheduled)
+            throw new InvalidOperationException("Only scheduled lessons can be edited");
+
+        lesson.Subject = request.Subject;
+        lesson.StartTime = request.StartTime.ToUniversalTime();
+        lesson.ExpectedDurationInHours = request.ExpectedDurationInHours;
+
+        var desiredStudentIds = request.StudentIds.Distinct().ToList();
+        var existingParticipants = await _db.LessonParticipants
+            .Where(lp => lp.LessonId == lessonId)
+            .ToListAsync(ct);
+
+        var existingStudentIds = existingParticipants.Select(x => x.StudentId).ToHashSet();
+        var toRemove = existingParticipants.Where(x => !desiredStudentIds.Contains(x.StudentId)).ToList();
+        if (toRemove.Any())
+            _db.LessonParticipants.RemoveRange(toRemove);
+
+        var toAdd = desiredStudentIds.Where(id => !existingStudentIds.Contains(id)).ToList();
+        if (toAdd.Any())
+        {
+            var students = await _db.Students.Where(s => toAdd.Contains(s.Id)).ToListAsync(ct);
+            if (students.Count != toAdd.Count)
+                throw new KeyNotFoundException("One or more students not found");
+
+            foreach (var student in students)
+            {
+                _db.LessonParticipants.Add(new LessonParticipant
+                {
+                    LessonId = lessonId,
+                    StudentId = student.Id,
+                    TeacherId = _currentTeacher.TeacherId,
+                    HourlyPrice = student.BaseHourlyPrice,
+                    DurationInHours = request.ExpectedDurationInHours,
+                    TotalPrice = 0m
+                });
+            }
+        }
+
+        // Update existing participants to reflect base hourly price + expected duration.
+        var participantsToUpdate = await _db.LessonParticipants
+            .Where(lp => lp.LessonId == lessonId && desiredStudentIds.Contains(lp.StudentId))
+            .ToListAsync(ct);
+
+        foreach (var participant in participantsToUpdate)
+        {
+            var student = await _db.Students.FirstOrDefaultAsync(s => s.Id == participant.StudentId, ct);
+            if (student is null)
+                continue;
+
+            participant.HourlyPrice = student.BaseHourlyPrice;
+            participant.DurationInHours = request.ExpectedDurationInHours;
+            participant.TotalPrice = 0m; // will be recalculated on completion
+        }
+
+        await _db.SaveChangesAsync(ct);
+        _logger.LogInformation("Lesson {LessonId} updated for teacher {TeacherId}", lessonId, _currentTeacher.TeacherId);
     }
 }
