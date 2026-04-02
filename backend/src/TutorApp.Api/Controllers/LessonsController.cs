@@ -35,4 +35,11 @@ public class LessonsController : ControllerBase
         await _lessonService.CompleteLessonAsync(lessonId, request, ct);
         return NoContent();
     }
+
+    [HttpGet("dashboard")]
+    public async Task<IActionResult> GetDashboard(CancellationToken ct)
+    {
+        var data = await _lessonService.GetDashboardAsync(ct);
+        return Ok(data);
+    }
 }

@@ -20,4 +20,11 @@ public class StudentsController : ControllerBase
         var debt = await _studentService.GetStudentDebtAsync(studentId, ct);
         return Ok(new { studentId, debt });
     }
+
+    [HttpGet("options")]
+    public async Task<IActionResult> GetOptions([FromQuery] string? search, CancellationToken ct)
+    {
+        var options = await _studentService.GetStudentOptionsAsync(search, ct);
+        return Ok(options);
+    }
 }

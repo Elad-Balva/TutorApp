@@ -117,4 +117,65 @@ public class LessonService : ILessonService
             _currentTeacher.TeacherId
         );
     }
+
+    public async Task<LessonsDashboardDto> GetDashboardAsync(CancellationToken ct)
+    {
+        var now = DateTimeOffset.UtcNow;
+
+        var futureLessons = await _db.Lessons
+            .Where(x => x.Status == LessonStatus.Scheduled && x.StartTime > now)
+            .OrderBy(x => x.StartTime)
+            .Select(x => new LessonDashboardItemDto(
+                x.Id,
+                x.StartTime,
+                x.Subject,
+                x.Status.ToString(),
+                x.Participants.Count(),
+                0m
+            ))
+            .Take(50)
+            .ToListAsync(ct);
+
+        var completed = await _db.Lessons
+            .Where(x => x.Status == LessonStatus.Completed)
+            .Select(x => new
+            {
+                x.Id,
+                x.StartTime,
+                x.Subject,
+                Status = x.Status.ToString(),
+                ParticipantCount = x.Participants.Count(),
+                TotalPrice = x.Participants.Sum(p => p.TotalPrice)
+            })
+            .OrderByDescending(x => x.StartTime)
+            .Take(100)
+            .ToListAsync(ct);
+
+        var unpaidLessons = new List<LessonDashboardItemDto>();
+        foreach (var lesson in completed)
+        {
+            var participantStudentIds = await _db.LessonParticipants
+                .Where(lp => lp.LessonId == lesson.Id)
+                .Select(lp => lp.StudentId)
+                .ToListAsync(ct);
+
+            var paid = await _db.Payments
+                .Where(p => participantStudentIds.Contains(p.StudentId))
+                .SumAsync(p => (decimal?)p.Amount, ct) ?? 0m;
+
+            var unpaidAmount = decimal.Round(lesson.TotalPrice - paid, 2);
+            if (unpaidAmount <= 0) continue;
+
+            unpaidLessons.Add(new LessonDashboardItemDto(
+                lesson.Id,
+                lesson.StartTime,
+                lesson.Subject,
+                lesson.Status,
+                lesson.ParticipantCount,
+                unpaidAmount
+            ));
+        }
+
+        return new LessonsDashboardDto(futureLessons, unpaidLessons);
+    }
 }

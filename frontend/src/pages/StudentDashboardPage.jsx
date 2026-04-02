@@ -22,7 +22,7 @@ export function StudentDashboardPage({ student }) {
         <CardContent>
           <Typography variant="subtitle1">Current Debt</Typography>
           <Typography variant="h4">
-            {debtQuery.isLoading ? "..." : `${Number(debtQuery.data?.debt || 0).toFixed(2)} USD`}
+            {debtQuery.isLoading ? "..." : `₪${Number(debtQuery.data?.debt || 0).toFixed(2)}`}
           </Typography>
         </CardContent>
       </Card>

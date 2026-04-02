@@ -1,5 +1,6 @@
 ﻿using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging;
+using TutorApp.Application.DTOs.Students;
 using TutorApp.Application.Interfaces;
 using TutorApp.Domain.Enums;
 
@@ -30,5 +31,20 @@ public class StudentService : IStudentService
         _logger.LogInformation("Debt calculated for student {StudentId}: {Debt}", studentId, debt);
 
         return debt;
+    }
+
+    public async Task<List<StudentOptionDto>> GetStudentOptionsAsync(string? search, CancellationToken ct)
+    {
+        var query = _db.Students.Where(x => x.IsActive);
+        if (!string.IsNullOrWhiteSpace(search))
+        {
+            query = query.Where(x => x.Name.Contains(search));
+        }
+
+        return await query
+            .OrderBy(x => x.Name)
+            .Select(x => new StudentOptionDto(x.Id, x.Name))
+            .Take(100)
+            .ToListAsync(ct);
     }
 }
