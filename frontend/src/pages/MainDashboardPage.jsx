@@ -2,17 +2,17 @@ import { useMemo, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import {
   Alert,
+  Autocomplete,
   Box,
   Button,
   Card,
   CardContent,
-  Checkbox,
+  CircularProgress,
   Dialog,
   DialogActions,
   DialogContent,
   DialogTitle,
   Fab,
-  FormControlLabel,
   List,
   ListItem,
   ListItemText,
@@ -21,6 +21,7 @@ import {
 } from "@mui/material";
 import { createLesson, getLessonsDashboard } from "../api/lessonsApi";
 import { getStudentOptions } from "../api/studentsApi";
+import { useDebouncedValue } from "../hooks/useDebouncedValue";
 
 const formatDate = (utc) =>
   new Date(utc).toLocaleString("he-IL", {
@@ -34,8 +35,10 @@ export function MainDashboardPage() {
   const [open, setOpen] = useState(false);
   const [subject, setSubject] = useState("");
   const [startTime, setStartTime] = useState("");
-  const [selectedStudentIds, setSelectedStudentIds] = useState([]);
+  const [participantSearch, setParticipantSearch] = useState("");
+  const [selectedParticipants, setSelectedParticipants] = useState([]);
 
+  const debouncedParticipantSearch = useDebouncedValue(participantSearch, 300);
   const queryClient = useQueryClient();
 
   const dashboardQuery = useQuery({
@@ -43,10 +46,18 @@ export function MainDashboardPage() {
     queryFn: getLessonsDashboard,
   });
 
-  const studentsQuery = useQuery({
-    queryKey: ["studentOptions"],
-    queryFn: getStudentOptions,
+  const studentOptionsQuery = useQuery({
+    queryKey: ["studentOptions", debouncedParticipantSearch],
+    queryFn: () => getStudentOptions(debouncedParticipantSearch),
+    enabled: open,
   });
+
+  const mergedParticipantOptions = useMemo(() => {
+    const map = new Map();
+    for (const s of selectedParticipants) map.set(s.id, s);
+    for (const s of studentOptionsQuery.data || []) map.set(s.id, s);
+    return Array.from(map.values()).sort((a, b) => a.name.localeCompare(b.name, "he"));
+  }, [selectedParticipants, studentOptionsQuery.data]);
 
   const createLessonMutation = useMutation({
     mutationFn: createLesson,
@@ -54,15 +65,21 @@ export function MainDashboardPage() {
       setOpen(false);
       setSubject("");
       setStartTime("");
-      setSelectedStudentIds([]);
+      setParticipantSearch("");
+      setSelectedParticipants([]);
       queryClient.invalidateQueries({ queryKey: ["lessonsDashboard"] });
     },
   });
 
   const canSubmit = useMemo(
-    () => subject.trim().length > 0 && startTime && selectedStudentIds.length > 0,
-    [subject, startTime, selectedStudentIds]
+    () => subject.trim().length > 0 && startTime && selectedParticipants.length > 0,
+    [subject, startTime, selectedParticipants]
   );
+
+  const openDialog = () => {
+    setParticipantSearch("");
+    setOpen(true);
+  };
 
   return (
     <Box sx={{ p: 2, pb: 10, display: "grid", gap: 2 }}>
@@ -121,13 +138,13 @@ export function MainDashboardPage() {
       <Fab
         color="primary"
         aria-label="add lesson"
-        onClick={() => setOpen(true)}
+        onClick={openDialog}
         sx={{ position: "fixed", right: 16, bottom: 16 }}
       >
         +
       </Fab>
 
-      <Dialog open={open} onClose={() => setOpen(false)} fullWidth>
+      <Dialog open={open} onClose={() => setOpen(false)} fullWidth maxWidth="sm">
         <DialogTitle>Add Lesson</DialogTitle>
         <DialogContent sx={{ display: "grid", gap: 2, pt: "12px !important" }}>
           <TextField
@@ -143,25 +160,37 @@ export function MainDashboardPage() {
             onChange={(e) => setStartTime(e.target.value)}
             InputLabelProps={{ shrink: true }}
           />
-          <Typography variant="subtitle2">Participants</Typography>
-          {(studentsQuery.data || []).map((student) => (
-            <FormControlLabel
-              key={student.id}
-              control={
-                <Checkbox
-                  checked={selectedStudentIds.includes(student.id)}
-                  onChange={(e) => {
-                    if (e.target.checked) {
-                      setSelectedStudentIds((prev) => [...prev, student.id]);
-                    } else {
-                      setSelectedStudentIds((prev) => prev.filter((id) => id !== student.id));
-                    }
-                  }}
-                />
-              }
-              label={student.name}
-            />
-          ))}
+          <Autocomplete
+            multiple
+            options={mergedParticipantOptions}
+            value={selectedParticipants}
+            onChange={(_, value) => setSelectedParticipants(value)}
+            inputValue={participantSearch}
+            onInputChange={(_, value, reason) => {
+              if (reason === "input" || reason === "clear") setParticipantSearch(value);
+            }}
+            getOptionLabel={(option) => option.name}
+            isOptionEqualToValue={(a, b) => a.id === b.id}
+            filterOptions={(options) => options}
+            loading={studentOptionsQuery.isFetching}
+            noOptionsText={studentOptionsQuery.isFetching ? "Searching…" : "No students match"}
+            renderInput={(params) => (
+              <TextField
+                {...params}
+                label="Participants"
+                placeholder="Type to search students"
+                InputProps={{
+                  ...params.InputProps,
+                  endAdornment: (
+                    <>
+                      {studentOptionsQuery.isFetching ? <CircularProgress color="inherit" size={20} /> : null}
+                      {params.InputProps.endAdornment}
+                    </>
+                  ),
+                }}
+              />
+            )}
+          />
         </DialogContent>
         <DialogActions>
           <Button onClick={() => setOpen(false)}>Cancel</Button>
@@ -172,7 +201,7 @@ export function MainDashboardPage() {
               createLessonMutation.mutate({
                 subject: subject.trim(),
                 startTime: new Date(startTime).toISOString(),
-                studentIds: selectedStudentIds,
+                studentIds: selectedParticipants.map((s) => s.id),
               })
             }
           >

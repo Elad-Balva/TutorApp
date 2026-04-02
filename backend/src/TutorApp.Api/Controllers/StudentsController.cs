@@ -1,4 +1,5 @@
 ﻿using Microsoft.AspNetCore.Mvc;
+using TutorApp.Application.DTOs.Students;
 using TutorApp.Application.Interfaces;
 
 namespace TutorApp.Api.Controllers;
@@ -12,6 +13,13 @@ public class StudentsController : ControllerBase
     public StudentsController(IStudentService studentService)
     {
         _studentService = studentService;
+    }
+
+    [HttpPost]
+    public async Task<IActionResult> Create([FromBody] CreateStudentRequest request, CancellationToken ct)
+    {
+        var id = await _studentService.CreateStudentAsync(request, ct);
+        return CreatedAtAction(nameof(GetDebt), new { studentId = id }, new { id });
     }
 
     [HttpGet("{studentId:guid}/debt")]

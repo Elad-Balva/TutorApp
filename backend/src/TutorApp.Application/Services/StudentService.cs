@@ -2,6 +2,7 @@
 using Microsoft.Extensions.Logging;
 using TutorApp.Application.DTOs.Students;
 using TutorApp.Application.Interfaces;
+using TutorApp.Domain.Entities;
 using TutorApp.Domain.Enums;
 
 namespace TutorApp.Application.Services;
@@ -9,11 +10,16 @@ namespace TutorApp.Application.Services;
 public class StudentService : IStudentService
 {
     private readonly IAppDbContext _db;
+    private readonly ICurrentTeacherService _currentTeacher;
     private readonly ILogger<StudentService> _logger;
 
-    public StudentService(IAppDbContext db, ILogger<StudentService> logger)
+    public StudentService(
+        IAppDbContext db,
+        ICurrentTeacherService currentTeacher,
+        ILogger<StudentService> logger)
     {
         _db = db;
+        _currentTeacher = currentTeacher;
         _logger = logger;
     }
 
@@ -38,7 +44,8 @@ public class StudentService : IStudentService
         var query = _db.Students.Where(x => x.IsActive);
         if (!string.IsNullOrWhiteSpace(search))
         {
-            query = query.Where(x => x.Name.Contains(search));
+            var term = search.Trim().ToLowerInvariant();
+            query = query.Where(x => x.Name.ToLower().Contains(term));
         }
 
         return await query
@@ -46,5 +53,39 @@ public class StudentService : IStudentService
             .Select(x => new StudentOptionDto(x.Id, x.Name))
             .Take(100)
             .ToListAsync(ct);
+    }
+
+    public async Task<Guid> CreateStudentAsync(CreateStudentRequest request, CancellationToken ct)
+    {
+        await EnsureTeacherExistsAsync(ct);
+
+        var student = new Student
+        {
+            TeacherId = _currentTeacher.TeacherId,
+            Name = request.Name.Trim(),
+            PhoneNumber = string.IsNullOrWhiteSpace(request.PhoneNumber) ? null : request.PhoneNumber.Trim(),
+            BaseHourlyPrice = request.BaseHourlyPrice,
+            IsActive = true
+        };
+
+        _db.Students.Add(student);
+        await _db.SaveChangesAsync(ct);
+        _logger.LogInformation("Student {StudentId} created for teacher {TeacherId}", student.Id, _currentTeacher.TeacherId);
+
+        return student.Id;
+    }
+
+    private async Task EnsureTeacherExistsAsync(CancellationToken ct)
+    {
+        var id = _currentTeacher.TeacherId;
+        if (await _db.Teachers.AnyAsync(t => t.Id == id, ct)) return;
+
+        _db.Teachers.Add(new Teacher
+        {
+            Id = id,
+            Name = "Default Teacher",
+            Email = "teacher@tutorapp.local"
+        });
+        await _db.SaveChangesAsync(ct);
     }
 }

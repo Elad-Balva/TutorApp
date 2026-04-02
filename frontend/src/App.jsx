@@ -14,6 +14,7 @@ import {
 } from "@mui/material";
 import { MainDashboardPage } from "./pages/MainDashboardPage";
 import { LessonCompletionPage } from "./pages/LessonCompletionPage";
+import { AddStudentPage } from "./pages/AddStudentPage";
 import "./App.css";
 
 const queryClient = new QueryClient();
@@ -70,12 +71,23 @@ function App() {
             >
               <ListItemText primary="Complete Lesson" />
             </ListItemButton>
+            <ListItemButton
+              selected={activePage === "addStudent"}
+              onClick={() => {
+                setActivePage("addStudent");
+                setOpenMenu(false);
+              }}
+            >
+              <ListItemText primary="Add Student" />
+            </ListItemButton>
           </List>
         </Box>
       </Drawer>
 
       {activePage === "dashboard" ? (
         <MainDashboardPage />
+      ) : activePage === "addStudent" ? (
+        <AddStudentPage />
       ) : (
         <LessonCompletionPage
           lessonId="cccccccc-cccc-cccc-cccc-cccccccccccc"

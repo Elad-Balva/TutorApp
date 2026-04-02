@@ -49,6 +49,15 @@ builder.Services.AddRateLimiter(options =>
 
 var app = builder.Build();
 
+await using (var scope = app.Services.CreateAsyncScope())
+{
+    var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
+    var loggerFactory = scope.ServiceProvider.GetRequiredService<ILoggerFactory>();
+    var seedLogger = loggerFactory.CreateLogger("DemoDataSeeder");
+    await db.Database.MigrateAsync();
+    await DemoDataSeeder.SeedIfEmptyAsync(db, seedLogger);
+}
+
 app.UseMiddleware<GlobalExceptionMiddleware>();
 
 if (app.Environment.IsDevelopment())
