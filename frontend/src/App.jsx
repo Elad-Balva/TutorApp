@@ -3,6 +3,7 @@ import { useState } from "react";
 import { CssBaseline } from "@mui/material";
 import { MainDashboardPage } from "./pages/MainDashboardPage";
 import { StudentsPage } from "./pages/StudentsPage";
+import { InsightsPage } from "./pages/InsightsPage";
 import "./App.css";
 
 const queryClient = new QueryClient({
@@ -12,10 +13,10 @@ const queryClient = new QueryClient({
 });
 
 const TABS = [
-  { id: "settings",  label: "הגדרות",  icon: "settings"   },
-  { id: "payments",  label: "תשלומים", icon: "payments"   },
-  { id: "students",  label: "תלמידים", icon: "group"      },
-  { id: "dashboard", label: "שיעורים", icon: "dashboard"  },
+  { id: "settings",  label: "הגדרות",  icon: "settings"    },
+  { id: "insights",  label: "תובנות",  icon: "leaderboard" },
+  { id: "students",  label: "תלמידים", icon: "group"       },
+  { id: "dashboard", label: "שיעורים", icon: "dashboard"   },
 ];
 
 function SettingsPage() {
@@ -125,7 +126,7 @@ function App() {
       {/* ── Page Content ────────────────────────────────────── */}
       <main style={{ flex: 1 }}>
         {activePage === "dashboard" && <MainDashboardPage />}
-        {activePage === "payments"  && <MainDashboardPage defaultTab="attention" />}
+        {activePage === "insights"  && <InsightsPage />}
         {activePage === "students"  && <StudentsPage />}
         {activePage === "settings"  && <SettingsPage />}
       </main>
