@@ -92,12 +92,24 @@ function App() {
         WebkitBackdropFilter: "blur(24px)",
         borderBottom: "1px solid rgba(255,255,255,0.05)",
       }}>
-        {/* Logo only — no text */}
-        <img
-          src="/logo.png"
-          alt="TutorTally"
-          style={{ height: 32, width: 32, borderRadius: 8, objectFit: "contain" }}
-        />
+        {/* Logo + wordmark */}
+        <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+          <img
+            src="/logo.png"
+            alt="TutorTally"
+            style={{ height: 34, width: 34, borderRadius: 9, objectFit: "contain" }}
+          />
+          <span style={{
+            fontFamily: "'Manrope', sans-serif",
+            fontWeight: 800,
+            fontSize: "1.25rem",
+            color: "#ffffff",
+            letterSpacing: "-0.03em",
+            lineHeight: 1,
+          }}>
+            TutorTally
+          </span>
+        </div>
 
         {/* Right side controls */}
         <div style={{ display: "flex", alignItems: "center", gap: 4 }}>

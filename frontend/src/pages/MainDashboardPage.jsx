@@ -328,7 +328,7 @@ export function MainDashboardPage({ defaultTab = "future" }) {
     setSubjectInput("");
     setStartTimeInput(toDateTimeLocal(new Date(Date.now() + 60 * 60 * 1000).toISOString()));
     setExpectedDurationInHours(defaultHours);
-    setIsInPerson(true);
+    setIsInPerson(false);
     setParticipantSearch("");
     setSelectedParticipants([]);
     setDialogOpen(true);
