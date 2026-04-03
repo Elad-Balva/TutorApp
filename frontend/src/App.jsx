@@ -4,6 +4,7 @@ import { CssBaseline } from "@mui/material";
 import { MainDashboardPage } from "./pages/MainDashboardPage";
 import { StudentsPage } from "./pages/StudentsPage";
 import { InsightsPage } from "./pages/InsightsPage";
+import { SettingsPage } from "./pages/SettingsPage";
 import "./App.css";
 
 const queryClient = new QueryClient({
@@ -18,15 +19,6 @@ const TABS = [
   { id: "students",  label: "תלמידים", icon: "group"       },
   { id: "dashboard", label: "שיעורים", icon: "dashboard"   },
 ];
-
-function SettingsPage() {
-  return (
-    <div style={{ display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", minHeight: "60vh", color: "rgba(192,199,213,0.5)", gap: 12 }}>
-      <span className="material-symbols-outlined" style={{ fontSize: 48, color: "#404753" }}>settings</span>
-      <p style={{ fontFamily: "'Inter',sans-serif", fontSize: "1rem" }}>הגדרות יגיעו בקרוב</p>
-    </div>
-  );
-}
 
 /* Nav item tab button — fully inline-styled to avoid preflight/Tailwind conflicts */
 function NavTab({ tab, isActive, onClick }) {

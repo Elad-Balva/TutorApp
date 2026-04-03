@@ -11,6 +11,7 @@ import {
   TextField,
 } from "@mui/material";
 import { createStudent, getStudents, updateStudent } from "../api/studentsApi";
+import { loadSettings } from "../utils/settings";
 
 const formatIls = (value) => `₪${Number(value || 0).toFixed(2)}`;
 
@@ -23,7 +24,7 @@ export function StudentsPage() {
 
   const [name, setName] = useState("");
   const [phoneNumber, setPhoneNumber] = useState("");
-  const [baseHourlyPrice, setBaseHourlyPrice] = useState("120");
+  const [baseHourlyPrice, setBaseHourlyPrice] = useState(() => String(loadSettings().defaultHourlyPrice));
   const [addressLine, setAddressLine] = useState("");
   const [locationNotes, setLocationNotes] = useState("");
   const [isActive, setIsActive] = useState(true);
@@ -38,7 +39,7 @@ export function StudentsPage() {
       createStudent({ name, phoneNumber, baseHourlyPrice, addressLine, locationNotes }),
     onSuccess: () => {
       setAddOpen(false);
-      setName(""); setPhoneNumber(""); setBaseHourlyPrice("120"); setAddressLine(""); setLocationNotes("");
+      setName(""); setPhoneNumber(""); setBaseHourlyPrice(String(loadSettings().defaultHourlyPrice)); setAddressLine(""); setLocationNotes("");
       queryClient.invalidateQueries({ queryKey: ["students"] });
     },
   });
@@ -75,7 +76,7 @@ export function StudentsPage() {
   };
 
   const resetForm = () => {
-    setName(""); setPhoneNumber(""); setBaseHourlyPrice("120"); setAddressLine(""); setLocationNotes("");
+    setName(""); setPhoneNumber(""); setBaseHourlyPrice(String(loadSettings().defaultHourlyPrice)); setAddressLine(""); setLocationNotes("");
   };
 
   return (

@@ -1,8 +1,7 @@
 import { useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { getAnalytics } from "../api/analyticsApi";
-
-const MONTHLY_GOAL = 18000;
+import { loadSettings } from "../utils/settings";
 
 const PERIODS = [
   { id: "week",  label: "שבוע" },
@@ -104,7 +103,8 @@ export function InsightsPage() {
     staleTime: 60_000,
   });
 
-  const goalPct = data ? Math.min(Math.round((data.totalIncome / MONTHLY_GOAL) * 100), 100) : 0;
+  const monthlyGoal = loadSettings().monthlyGoal;
+  const goalPct = data && monthlyGoal > 0 ? Math.min(Math.round((data.totalIncome / monthlyGoal) * 100), 100) : 0;
   const changePositive = (data?.incomeChangePercent ?? 0) >= 0;
 
   return (
@@ -167,7 +167,7 @@ export function InsightsPage() {
               </div>
               <div style={{ textAlign: "left" }}>
                 <p style={{ fontFamily: "'Inter',sans-serif", fontSize: "0.6875rem", fontWeight: 600, color: "rgba(192,199,213,0.4)", letterSpacing: "0.08em", textTransform: "uppercase", marginBottom: 4 }}>
-                  יעד: {formatIls(MONTHLY_GOAL)}
+                  יעד: {formatIls(monthlyGoal)}
                 </p>
                 {isLoading
                   ? <Skeleton width={70} height={16} />

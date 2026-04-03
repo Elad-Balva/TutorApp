@@ -25,6 +25,8 @@ import { useDebouncedValue } from "../hooks/useDebouncedValue";
 import { LessonCompleteDialog } from "../components/LessonCompleteDialog";
 import { buildWazeUrl } from "../utils/waze";
 import { formatLessonScheduleBadge } from "../utils/lessonRelativeTime";
+import { loadSettings } from "../utils/settings";
+import { PAYMENT_METHODS } from "../utils/paymentMethods";
 
 const SUBJECT_SUGGESTIONS = ["c#", "java", "פרויקט תכנות", "מתמטיקה", "אנגלית", "פיזיקה"];
 
@@ -70,12 +72,6 @@ const unpaidNamesLine = (lesson) => {
   return unpaid.map((p) => p.studentName).join(" · ") || "—";
 };
 
-const PAYMENT_METHODS = [
-  { id: "מזומן", label: "מזומן", icon: "payments" },
-  { id: "העברה בנקאית", label: "העברה בנקאית", icon: "account_balance" },
-  { id: "Bit / אפליקציה", label: "Bit / Pay App", icon: "install_mobile" },
-  { id: "אחר", label: "אחר", icon: "more_horiz" },
-];
 
 /* ─── Lesson card ──────────────────────────────────────────────── */
 function LessonCard({ lesson, isExpanded, onToggle, onComplete, onEdit, onCancel, accentColor }) {
@@ -223,14 +219,14 @@ export function MainDashboardPage({ defaultTab = "future" }) {
   const [completeDialogLesson, setCompleteDialogLesson] = useState(null);
   const [cancelTarget, setCancelTarget] = useState(null);
   const [paymentTarget, setPaymentTarget] = useState(null);
-  const [paymentMethod, setPaymentMethod] = useState(PAYMENT_METHODS[0].id);
+  const [paymentMethod, setPaymentMethod] = useState(() => loadSettings().preferredPayment);
   const [paymentNotes, setPaymentNotes] = useState("");
 
   const queryClient = useQueryClient();
 
   useEffect(() => {
     if (!paymentTarget) return;
-    setPaymentMethod(PAYMENT_METHODS[0].id);
+    setPaymentMethod(loadSettings().preferredPayment);
     setPaymentNotes("");
     markPaidMutation.reset();
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -261,11 +257,12 @@ export function MainDashboardPage({ defaultTab = "future" }) {
   const createLessonMutation = useMutation({
     mutationFn: createLesson,
     onSuccess: () => {
+      const s = loadSettings();
       setFormError(null);
       setDialogOpen(false);
       setSubjectInput("");
       setStartTimeInput("");
-      setExpectedDurationInHours("1");
+      setExpectedDurationInHours(String(s.defaultDurationMinutes / 60));
       setIsInPerson(true);
       setParticipantSearch("");
       setSelectedParticipants([]);
@@ -323,12 +320,14 @@ export function MainDashboardPage({ defaultTab = "future" }) {
   }, [subjectInput, startTimeInput, selectedParticipants, expectedDurationInHours]);
 
   const openCreateDialog = () => {
+    const s = loadSettings();
+    const defaultHours = String(s.defaultDurationMinutes / 60);
     setFormError(null);
     setDialogMode("create");
     setEditingLessonId(null);
     setSubjectInput("");
     setStartTimeInput(toDateTimeLocal(new Date(Date.now() + 60 * 60 * 1000).toISOString()));
-    setExpectedDurationInHours("1");
+    setExpectedDurationInHours(defaultHours);
     setIsInPerson(true);
     setParticipantSearch("");
     setSelectedParticipants([]);
