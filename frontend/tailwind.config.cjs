@@ -1,0 +1,57 @@
+/** @type {import('tailwindcss').Config} */
+module.exports = {
+  darkMode: "class",
+  content: ["./index.html", "./src/**/*.{js,ts,jsx,tsx}"],
+  corePlugins: {
+    preflight: false,
+  },
+  theme: {
+    extend: {
+      colors: {
+        surface: "#111317",
+        "surface-container": "#1e2024",
+        "surface-container-high": "#282a2e",
+        "surface-container-highest": "#333539",
+        "surface-container-low": "#1a1c20",
+        "surface-container-lowest": "#0c0e12",
+        "on-surface": "#e2e2e8",
+        "on-surface-variant": "#c0c7d5",
+        "outline-variant": "#404753",
+        outline: "#8a919f",
+        primary: "#a3c9ff",
+        "primary-container": "#1493ff",
+        "on-primary": "#00315d",
+        "on-primary-container": "#002a51",
+        "secondary-fixed": "#9ffb00",
+        "secondary-fixed-dim": "#8bdc00",
+        tertiary: "#c6c6c6",
+        "on-tertiary": "#2f3131",
+        background: "#111317",
+        error: "#ffb4ab",
+        "error-container": "#93000a",
+        accent: "#0091FF",
+      },
+      fontFamily: {
+        headline: ["Manrope", "sans-serif"],
+        body: ["Inter", "sans-serif"],
+        label: ["Inter", "sans-serif"],
+      },
+      borderRadius: {
+        DEFAULT: "0.25rem",
+        sm: "0.375rem",
+        md: "0.5rem",
+        lg: "0.5rem",
+        xl: "0.75rem",
+        "2xl": "1rem",
+        "3xl": "1.5rem",
+        full: "9999px",
+      },
+      boxShadow: {
+        "glow-primary": "0 8px 30px rgb(20, 147, 255, 0.25)",
+        "glow-sm": "0 4px 15px rgb(20, 147, 255, 0.15)",
+        "nav": "0 -8px 30px rgb(0, 0, 0, 0.5)",
+      },
+    },
+  },
+  plugins: [],
+};

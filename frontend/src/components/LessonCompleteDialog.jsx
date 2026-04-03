@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
-import { Button, Dialog, DialogActions, DialogContent, DialogTitle, Typography } from "@mui/material";
+import { Alert, Dialog, DialogActions, DialogContent, DialogTitle } from "@mui/material";
 import { ParticipantEditorRow } from "./ParticipantEditorRow";
 import { completeLesson } from "../api/lessonsApi";
 
@@ -32,6 +32,11 @@ export function LessonCompleteDialog({ open, lesson, onClose }) {
     },
   });
 
+  const totalAmount = useMemo(
+    () => rows.reduce((sum, r) => sum + r.hourlyPrice * r.durationInHours, 0),
+    [rows]
+  );
+
   const canSubmit = useMemo(
     () =>
       rows.length > 0 &&
@@ -43,38 +48,85 @@ export function LessonCompleteDialog({ open, lesson, onClose }) {
 
   return (
     <Dialog open={open} onClose={onClose} fullWidth maxWidth="sm">
-      <DialogTitle>סיום שיעור</DialogTitle>
-      <DialogContent sx={{ display: "grid", gap: 2, pt: "12px !important" }}>
-        <Typography variant="subtitle1" sx={{ fontSize: "1.125rem", fontWeight: 800 }}>
-          {(lesson.participants || []).map((p) => p.studentName).join(" · ") || "—"}
-        </Typography>
-        <Typography variant="body1" color="text.secondary" sx={{ fontSize: "1.0625rem", lineHeight: 1.55 }}>
-          {formatDate(lesson.startTime)} | משך צפוי: {lesson.expectedDurationInHours} שעות
-        </Typography>
-        {lesson.subject ? (
-          <Typography variant="body1" color="text.secondary" sx={{ fontSize: "1.0625rem", lineHeight: 1.55 }}>
-            נושא: {lesson.subject}
-          </Typography>
-        ) : null}
+      <DialogTitle sx={{ pb: 0.5 }}>
+        <p style={{ fontFamily: "'Manrope',sans-serif", fontWeight: 800, fontSize: "1.75rem", color: "#c6c6c6", letterSpacing: "-0.02em", margin: 0 }}>
+          פרטי שיעור סופיים
+        </p>
+        <p style={{ fontFamily: "'Inter',sans-serif", fontWeight: 400, fontSize: "0.8125rem", color: "rgba(192,199,213,0.65)", marginTop: 4 }}>
+          אנא ודא את פרטי המפגש לפני סיום
+        </p>
+      </DialogTitle>
 
-        {rows.map((row, idx) => (
-          <ParticipantEditorRow
-            key={row.studentId}
-            row={row}
-            onChange={(updated) => setRows((prev) => prev.map((x, i) => (i === idx ? updated : x)))}
-          />
-        ))}
+      <DialogContent sx={{ pt: "12px !important" }}>
+        <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
 
-        {completeMutation.error ? (
-          <Typography color="error" variant="body2">
-            {completeMutation.error.message}
-          </Typography>
-        ) : null}
+          {/* Lesson meta */}
+          <div style={{
+            background: "rgba(255,255,255,0.03)",
+            border: "1px solid rgba(255,255,255,0.07)",
+            borderRadius: 14,
+            padding: "14px 16px",
+          }}>
+            <p style={{ fontFamily: "'Manrope',sans-serif", fontWeight: 700, fontSize: "1rem", color: "#e2e2e8", marginBottom: 4 }}>
+              {(lesson.participants || []).map((p) => p.studentName).join(" · ") || "—"}
+            </p>
+            <p style={{ fontSize: "0.75rem", color: "rgba(192,199,213,0.5)" }}>
+              {formatDate(lesson.startTime)} · משך צפוי: {lesson.expectedDurationInHours} שעות
+            </p>
+            {lesson.subject ? (
+              <p style={{ fontSize: "0.75rem", color: "rgba(192,199,213,0.5)", marginTop: 2 }}>נושא: {lesson.subject}</p>
+            ) : null}
+          </div>
+
+          {/* Participant rows */}
+          <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+            {rows.map((row, idx) => (
+              <ParticipantEditorRow
+                key={row.studentId}
+                row={row}
+                onChange={(updated) => setRows((prev) => prev.map((x, i) => (i === idx ? updated : x)))}
+              />
+            ))}
+          </div>
+
+          {/* Total */}
+          <div style={{
+            background: "rgba(255,255,255,0.03)",
+            border: "1px solid rgba(255,255,255,0.07)",
+            borderRadius: 14,
+            padding: "14px 16px",
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "space-between",
+          }}>
+            <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+              <span
+                className="material-symbols-outlined"
+                style={{ fontSize: 24, color: "#9ffb00", fontVariationSettings: "'FILL' 1" }}
+              >
+                payments
+              </span>
+              <div>
+                <p style={{ fontSize: "0.75rem", color: "rgba(192,199,213,0.5)", marginBottom: 2 }}>סה&quot;כ לתשלום</p>
+                <p style={{ fontSize: "0.6875rem", color: "rgba(192,199,213,0.35)" }}>
+                  עבור {rows.reduce((s, r) => s + r.durationInHours, 0)} שעות לימוד
+                </p>
+              </div>
+            </div>
+            <p style={{ fontFamily: "'Manrope',sans-serif", fontWeight: 800, fontSize: "2rem", color: "#9ffb00", letterSpacing: "-0.02em" }}>
+              ₪{totalAmount.toFixed(0)}
+            </p>
+          </div>
+
+          {completeMutation.error ? (
+            <Alert severity="error">{completeMutation.error.message}</Alert>
+          ) : null}
+        </div>
       </DialogContent>
-      <DialogActions>
-        <Button onClick={onClose}>ביטול</Button>
-        <Button
-          variant="contained"
+
+      <DialogActions sx={{ px: 3, pb: 3, pt: 0.5, flexDirection: "column", gap: 1 }}>
+        <button
+          className="btn-primary"
           disabled={!canSubmit || completeMutation.isPending}
           onClick={() =>
             completeMutation.mutate({
@@ -87,8 +139,27 @@ export function LessonCompleteDialog({ open, lesson, onClose }) {
             })
           }
         >
-          סמן כבוצע
-        </Button>
+          {completeMutation.isPending ? "מעדכן..." : "סמן כבוצע"}
+        </button>
+        <button
+          onClick={onClose}
+          style={{
+            width: "100%",
+            padding: "0.75rem",
+            fontFamily: "'Manrope',sans-serif",
+            fontWeight: 600,
+            fontSize: "0.875rem",
+            color: "rgba(192,199,213,0.6)",
+            background: "none",
+            border: "none",
+            cursor: "pointer",
+            transition: "color 0.15s ease",
+          }}
+          onMouseEnter={(e) => (e.currentTarget.style.color = "#e2e2e8")}
+          onMouseLeave={(e) => (e.currentTarget.style.color = "rgba(192,199,213,0.6)")}
+        >
+          ביטול
+        </button>
       </DialogActions>
     </Dialog>
   );
