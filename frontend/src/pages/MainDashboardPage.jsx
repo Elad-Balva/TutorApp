@@ -14,6 +14,7 @@ import {
   TextField,
 } from "@mui/material";
 import {
+  cancelLesson,
   createLesson,
   getLessonsDashboard,
   markLessonParticipantPaid,
@@ -27,9 +28,24 @@ import { formatLessonScheduleBadge } from "../utils/lessonRelativeTime";
 
 const SUBJECT_SUGGESTIONS = ["c#", "java", "פרויקט תכנות", "מתמטיקה", "אנגלית", "פיזיקה"];
 
-/** Date only — e.g. "9.4.2026" (time already shown large in card) */
+/** Date only — e.g. "9.4.2026" */
 const formatDateOnly = (utc) =>
   new Date(utc).toLocaleDateString("he-IL", { dateStyle: "short" });
+
+/** Date + time — e.g. "9.4.2026, 20:00" */
+const formatDateTime = (utc) =>
+  new Date(utc).toLocaleString("he-IL", { dateStyle: "short", timeStyle: "short" });
+
+/**
+ * Split the relative time badge into { number, unit, prefix }.
+ * e.g. "לפני 6 ימים" → { prefix:"לפני", number:"6", unit:"ימים" }
+ *      "אתמול" → { prefix:null, number:null, unit:"אתמול" }
+ */
+function splitRelativeTime(badge) {
+  const m = badge.match(/^(לפני|בעוד)\s+(\d+)\s+(.+)$/);
+  if (m) return { prefix: m[1], number: m[2], unit: m[3] };
+  return { prefix: null, number: null, unit: badge };
+}
 
 /** Full date + time — used inside dialogs where context is needed */
 const formatDate = (utc) =>
@@ -62,7 +78,7 @@ const PAYMENT_METHODS = [
 ];
 
 /* ─── Lesson card ──────────────────────────────────────────────── */
-function LessonCard({ lesson, isExpanded, onToggle, onComplete, onEdit, accentColor }) {
+function LessonCard({ lesson, isExpanded, onToggle, onComplete, onEdit, onCancel, accentColor }) {
   const participants = lesson.participants || [];
 
   return (
@@ -71,48 +87,58 @@ function LessonCard({ lesson, isExpanded, onToggle, onComplete, onEdit, accentCo
       style={accentColor ? { borderColor: accentColor } : undefined}
       onClick={onToggle}
     >
-      {/* Row: name/meta + large time */}
-      <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", gap: 12 }}>
-        {/* Info column */}
-        <div style={{ flex: 1, minWidth: 0 }}>
-          {/* Name + schedule badge */}
-          <div style={{ display: "flex", flexWrap: "wrap", alignItems: "center", gap: 6, marginBottom: 5 }}>
-            <span style={{ fontFamily: "'Manrope',sans-serif", fontWeight: 800, fontSize: "1.0625rem", color: "#e2e2e8", lineHeight: 1.2 }}>
-              {participantNamesLine(lesson)}
-            </span>
-            <span className="badge-primary">{formatLessonScheduleBadge(lesson)}</span>
-          </div>
-          {/* Mode + subject */}
-          <div style={{ display: "flex", flexWrap: "wrap", gap: 5, alignItems: "center" }}>
-            <span className="badge-neutral">{lesson.isInPerson ? "פרונטלי" : "זום"}</span>
-            {lesson.subject ? (
-              <span style={{ fontSize: "0.75rem", color: "rgba(192,199,213,0.55)" }}>{lesson.subject}</span>
-            ) : null}
-          </div>
-          {/* Date only (time already shown large on the right) */}
-          <p style={{ fontSize: "0.7rem", color: "rgba(192,199,213,0.35)", marginTop: 4 }}>
-            {formatDateOnly(lesson.startTime)}
-          </p>
-        </div>
-
-        {/* Time column */}
-        <div style={{ flexShrink: 0, textAlign: "center", minWidth: 56 }}>
+      {/* ── Row 1: name + time ── */}
+      <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", gap: 12, marginBottom: 8 }}>
+        <span style={{ fontFamily: "'Manrope',sans-serif", fontWeight: 800, fontSize: "1.0625rem", color: "#e2e2e8", lineHeight: 1.25, flex: 1, minWidth: 0 }}>
+          {participantNamesLine(lesson)}
+        </span>
+        <div style={{ flexShrink: 0, textAlign: "center", minWidth: 58 }}>
           <p style={{ fontFamily: "'Manrope',sans-serif", fontWeight: 800, fontSize: "1.625rem", color: "#1493ff", lineHeight: 1 }}>
             {formatTime(lesson.startTime)}
           </p>
-          <p style={{ fontSize: "0.6875rem", color: "rgba(192,199,213,0.4)", marginTop: 3 }}>
+          <p style={{ fontSize: "0.6875rem", color: "rgba(192,199,213,0.4)", marginTop: 2 }}>
             {lesson.expectedDurationInHours} שע&apos;
           </p>
         </div>
       </div>
 
-      {/* Expanded section */}
+      {/* ── Row 2: schedule badge · mode · subject · date ── */}
+      <div style={{ display: "flex", flexWrap: "wrap", alignItems: "center", gap: 6 }}>
+        <span className="badge-primary" style={{ flexShrink: 0 }}>
+          {formatLessonScheduleBadge(lesson)}
+        </span>
+        <span
+          style={{
+            display: "inline-flex", alignItems: "center", gap: 4,
+            fontSize: "0.6875rem", fontWeight: 600, padding: "2px 8px",
+            borderRadius: 99, fontFamily: "'Inter',sans-serif",
+            background: lesson.isInPerson ? "rgba(163,201,255,0.08)" : "rgba(159,251,0,0.08)",
+            color: lesson.isInPerson ? "rgba(163,201,255,0.75)" : "rgba(159,251,0,0.75)",
+            border: lesson.isInPerson ? "1px solid rgba(163,201,255,0.15)" : "1px solid rgba(159,251,0,0.15)",
+          }}
+        >
+          <span className="material-symbols-outlined" style={{ fontSize: 11 }}>
+            {lesson.isInPerson ? "home" : "videocam"}
+          </span>
+          {lesson.isInPerson ? "פרונטלי" : "זום"}
+        </span>
+        {lesson.subject ? (
+          <span style={{ fontSize: "0.75rem", color: "rgba(192,199,213,0.5)", fontFamily: "'Inter',sans-serif" }}>
+            {lesson.subject}
+          </span>
+        ) : null}
+        <span style={{ marginInlineStart: "auto", fontSize: "0.6875rem", color: "rgba(192,199,213,0.3)", fontFamily: "'Inter',sans-serif" }}>
+          {formatDateOnly(lesson.startTime)}
+        </span>
+      </div>
+
+      {/* ── Expanded section ── */}
       <Collapse in={isExpanded} timeout={220} unmountOnExit>
         <div
           style={{ marginTop: 12, paddingTop: 12, borderTop: "1px solid rgba(255,255,255,0.06)" }}
           onClick={(e) => e.stopPropagation()}
         >
-          {/* Waze links — only shown for in-person with addresses */}
+          {/* Waze links — in-person with address only */}
           {lesson.isInPerson && participants.some((p) => p.addressLine) ? (
             <div style={{ display: "flex", flexWrap: "wrap", gap: 6, marginBottom: 10 }}>
               {participants.map((p) => {
@@ -141,12 +167,34 @@ function LessonCard({ lesson, isExpanded, onToggle, onComplete, onEdit, accentCo
           ) : null}
 
           {/* Action buttons */}
-          <div style={{ display: "flex", flexWrap: "wrap", gap: 8 }}>
+          <div style={{ display: "flex", flexWrap: "wrap", gap: 8, alignItems: "center" }}>
             <button className="btn-primary-sm" onClick={onComplete}>
               התחלה / סיים
             </button>
             <button className="btn-outline-sm" onClick={onEdit}>
               ערוך
+            </button>
+            <button
+              onClick={onCancel}
+              style={{
+                marginInlineStart: "auto",
+                display: "inline-flex", alignItems: "center", gap: 4,
+                padding: "0.45rem 0.75rem",
+                borderRadius: 10,
+                border: "1px solid rgba(255,100,80,0.2)",
+                background: "transparent",
+                color: "rgba(255,130,110,0.7)",
+                fontSize: "0.8125rem",
+                fontFamily: "'Manrope',sans-serif",
+                fontWeight: 600,
+                cursor: "pointer",
+                transition: "all 0.15s ease",
+              }}
+              onMouseEnter={(e) => { e.currentTarget.style.borderColor = "rgba(255,100,80,0.45)"; e.currentTarget.style.color = "#ff8070"; e.currentTarget.style.background = "rgba(255,100,80,0.06)"; }}
+              onMouseLeave={(e) => { e.currentTarget.style.borderColor = "rgba(255,100,80,0.2)"; e.currentTarget.style.color = "rgba(255,130,110,0.7)"; e.currentTarget.style.background = "transparent"; }}
+            >
+              <span className="material-symbols-outlined" style={{ fontSize: 14 }}>cancel</span>
+              ביטול
             </button>
           </div>
         </div>
@@ -173,6 +221,7 @@ export function MainDashboardPage({ defaultTab = "future" }) {
   const [expandedFutureLessonId, setExpandedFutureLessonId] = useState(null);
   const [expandedAttentionLessonId, setExpandedAttentionLessonId] = useState(null);
   const [completeDialogLesson, setCompleteDialogLesson] = useState(null);
+  const [cancelTarget, setCancelTarget] = useState(null);
   const [paymentTarget, setPaymentTarget] = useState(null);
   const [paymentMethod, setPaymentMethod] = useState(PAYMENT_METHODS[0].id);
   const [paymentNotes, setPaymentNotes] = useState("");
@@ -239,6 +288,17 @@ export function MainDashboardPage({ defaultTab = "future" }) {
     onError: (err) => setFormError(err?.message || "שגיאה בשמירה"),
   });
 
+  const cancelLessonMutation = useMutation({
+    mutationFn: (lessonId) => cancelLesson(lessonId),
+    onSuccess: () => {
+      setCancelTarget(null);
+      setExpandedFutureLessonId(null);
+      setExpandedAttentionLessonId(null);
+      queryClient.invalidateQueries({ queryKey: ["lessonsDashboard"] });
+    },
+    onError: (err) => setFormError(err?.message || "שגיאה בביטול השיעור"),
+  });
+
   const markPaidMutation = useMutation({
     mutationFn: ({ lessonId, studentId, paymentMethod: method, notes }) =>
       markLessonParticipantPaid(lessonId, studentId, { paymentMethod: method, notes }),
@@ -293,7 +353,7 @@ export function MainDashboardPage({ defaultTab = "future" }) {
 
       {/* Page header */}
       <div>
-        <h1 className="page-title">לוח הבקרה</h1>
+        <h1 className="page-title">לוח שיעורים</h1>
         <p className="page-subtitle">ניהול שיעורים ותשלומים</p>
       </div>
 
@@ -339,6 +399,7 @@ export function MainDashboardPage({ defaultTab = "future" }) {
                 onToggle={() => setExpandedFutureLessonId((prev) => (prev === lesson.lessonId ? null : lesson.lessonId))}
                 onComplete={() => setCompleteDialogLesson(lesson)}
                 onEdit={() => openEditDialog(lesson)}
+                onCancel={() => setCancelTarget(lesson)}
               />
             ))}
             {!dashboardQuery.isLoading && (dashboardQuery.data?.futureLessons || []).length === 0 ? (
@@ -369,6 +430,7 @@ export function MainDashboardPage({ defaultTab = "future" }) {
                 }
                 onComplete={() => setCompleteDialogLesson(lesson)}
                 onEdit={() => openEditDialog(lesson)}
+                onCancel={() => setCancelTarget(lesson)}
               />
             ))}
 
@@ -383,31 +445,70 @@ export function MainDashboardPage({ defaultTab = "future" }) {
                 (p) => !p.isPaid && p.outstandingAmount > 0
               );
               return (
-                <div
-                  key={lesson.lessonId}
-                  className="lesson-card"
-                  style={{ cursor: "default" }}
-                >
-                  <div style={{ display: "flex", flexWrap: "wrap", alignItems: "center", gap: 6, marginBottom: 8 }}>
-                    <span style={{ fontFamily: "'Manrope', sans-serif", fontWeight: 800, fontSize: "1.0625rem", color: "#e2e2e8" }}>
-                      {unpaidNamesLine(lesson)}
-                    </span>
-                    <span className="badge-error">לא שולם</span>
-                    <span className="badge-neutral">{lesson.isInPerson ? "פרונטלי" : "זום"}</span>
-                  </div>
-                  {lesson.subject ? (
-                    <p style={{ fontSize: "0.75rem", color: "rgba(192,199,213,0.5)", marginBottom: 8 }}>{lesson.subject}</p>
-                  ) : null}
-                  <p style={{ fontSize: "0.7rem", color: "rgba(192,199,213,0.35)", marginBottom: 12 }}>
-                    {formatDateOnly(lesson.startTime)}
-                  </p>
+                <div key={lesson.lessonId} className="lesson-card" style={{ cursor: "default" }}>
 
+                  {/* ── Row 1: names + relative time (how long ago) ── */}
+                  {(() => {
+                    const badge = formatLessonScheduleBadge(lesson);
+                    const rt = splitRelativeTime(badge);
+                    return (
+                      <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", gap: 12, marginBottom: 8 }}>
+                        <span style={{ fontFamily: "'Manrope',sans-serif", fontWeight: 800, fontSize: "1.0625rem", color: "#e2e2e8", lineHeight: 1.25, flex: 1, minWidth: 0 }}>
+                          {unpaidNamesLine(lesson)}
+                        </span>
+                        <div style={{ flexShrink: 0, textAlign: "center", minWidth: 58 }}>
+                          {rt.number ? (
+                            <>
+                              <p style={{ fontFamily: "'Manrope',sans-serif", fontWeight: 800, fontSize: "1.625rem", color: "rgba(255,160,100,0.85)", lineHeight: 1 }}>
+                                {rt.number} {rt.unit}
+                              </p>
+                              <p style={{ fontSize: "0.6875rem", color: "rgba(255,160,100,0.5)", marginTop: 2 }}>
+                                {rt.prefix}
+                              </p>
+                            </>
+                          ) : (
+                            <p style={{ fontFamily: "'Manrope',sans-serif", fontWeight: 800, fontSize: "1.0rem", color: "rgba(255,160,100,0.85)", lineHeight: 1.2 }}>
+                              {rt.unit}
+                            </p>
+                          )}
+                        </div>
+                      </div>
+                    );
+                  })()}
+
+                  {/* ── Row 2: mode · subject · date+time ── */}
+                  <div style={{ display: "flex", flexWrap: "wrap", alignItems: "center", gap: 6, marginBottom: 12 }}>
+                    <span style={{ display: "none" }}>{/* badge hidden — relative time is shown large in row 1 */}</span>
+                    <span style={{
+                      display: "inline-flex", alignItems: "center", gap: 4,
+                      fontSize: "0.6875rem", fontWeight: 600, padding: "2px 8px",
+                      borderRadius: 99, fontFamily: "'Inter',sans-serif",
+                      background: lesson.isInPerson ? "rgba(163,201,255,0.08)" : "rgba(159,251,0,0.08)",
+                      color: lesson.isInPerson ? "rgba(163,201,255,0.75)" : "rgba(159,251,0,0.75)",
+                      border: lesson.isInPerson ? "1px solid rgba(163,201,255,0.15)" : "1px solid rgba(159,251,0,0.15)",
+                    }}>
+                      <span className="material-symbols-outlined" style={{ fontSize: 11 }}>
+                        {lesson.isInPerson ? "home" : "videocam"}
+                      </span>
+                      {lesson.isInPerson ? "פרונטלי" : "זום"}
+                    </span>
+                    {lesson.subject ? (
+                      <span style={{ fontSize: "0.75rem", color: "rgba(192,199,213,0.5)", fontFamily: "'Inter',sans-serif" }}>
+                        {lesson.subject}
+                      </span>
+                    ) : null}
+                    <span style={{ marginInlineStart: "auto", fontSize: "0.6875rem", color: "rgba(192,199,213,0.3)", fontFamily: "'Inter',sans-serif" }}>
+                      {formatDateTime(lesson.startTime)}
+                    </span>
+                  </div>
+
+                  {/* ── Participants: amount + pay button ── */}
                   <div style={{ borderTop: "1px solid rgba(255,255,255,0.06)", paddingTop: 12, display: "flex", flexDirection: "column", gap: 10 }}>
                     {unpaidParticipants.map((p) => (
                       <div key={p.studentId} style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12 }}>
                         <div>
-                          <p style={{ fontSize: "0.875rem", fontWeight: 600, color: "#e2e2e8" }}>{p.studentName}</p>
-                          <p style={{ fontFamily: "'Manrope', sans-serif", fontWeight: 800, fontSize: "1.25rem", color: "#9ffb00", lineHeight: 1.1 }}>
+                          <p style={{ fontSize: "0.8125rem", fontWeight: 600, color: "rgba(192,199,213,0.8)", marginBottom: 2 }}>{p.studentName}</p>
+                          <p style={{ fontFamily: "'Manrope',sans-serif", fontWeight: 800, fontSize: "1.25rem", color: "#9ffb00", lineHeight: 1.1 }}>
                             {formatIls(p.outstandingAmount)}
                           </p>
                         </div>
@@ -473,6 +574,75 @@ export function MainDashboardPage({ defaultTab = "future" }) {
         lesson={completeDialogLesson}
         onClose={() => setCompleteDialogLesson(null)}
       />
+
+      {/* ── Cancel Lesson Confirmation Dialog ─────────────────── */}
+      <Dialog
+        open={Boolean(cancelTarget)}
+        onClose={() => { if (!cancelLessonMutation.isPending) setCancelTarget(null); }}
+        fullWidth
+        maxWidth="xs"
+      >
+        <DialogTitle sx={{ pb: 0.5 }}>
+          <p style={{ fontFamily: "'Manrope',sans-serif", fontWeight: 800, fontSize: "1.5rem", color: "#c6c6c6", letterSpacing: "-0.02em", margin: 0 }}>
+            ביטול שיעור
+          </p>
+          <p style={{ fontFamily: "'Inter',sans-serif", fontWeight: 400, fontSize: "0.8125rem", color: "rgba(192,199,213,0.65)", marginTop: 4 }}>
+            האם אתה בטוח שברצונך לבטל את השיעור?
+          </p>
+        </DialogTitle>
+        <DialogContent>
+          {cancelTarget ? (
+            <div style={{
+              background: "rgba(255,100,80,0.06)",
+              border: "1px solid rgba(255,100,80,0.15)",
+              borderRadius: 14,
+              padding: "14px 16px",
+              marginTop: 4,
+            }}>
+              <p style={{ fontFamily: "'Manrope',sans-serif", fontWeight: 700, fontSize: "1rem", color: "#e2e2e8", marginBottom: 4 }}>
+                {participantNamesLine(cancelTarget)}
+              </p>
+              <p style={{ fontSize: "0.75rem", color: "rgba(192,199,213,0.5)" }}>
+                {formatTime(cancelTarget.startTime)} · {formatDateOnly(cancelTarget.startTime)}
+                {cancelTarget.subject ? ` · ${cancelTarget.subject}` : ""}
+              </p>
+            </div>
+          ) : null}
+          {cancelLessonMutation.isError ? (
+            <Alert severity="error" sx={{ mt: 2 }}>{cancelLessonMutation.error?.message}</Alert>
+          ) : null}
+        </DialogContent>
+        <DialogActions sx={{ px: 3, pb: 3, pt: 0.5, gap: 1.5 }}>
+          <button
+            className="btn-outline-sm"
+            style={{ flex: 1, padding: "0.65rem 1rem" }}
+            disabled={cancelLessonMutation.isPending}
+            onClick={() => setCancelTarget(null)}
+          >
+            חזרה
+          </button>
+          <button
+            disabled={cancelLessonMutation.isPending}
+            onClick={() => cancelLessonMutation.mutate(cancelTarget.lessonId)}
+            style={{
+              flex: 1,
+              padding: "0.65rem 1rem",
+              border: "1px solid rgba(255,100,80,0.35)",
+              borderRadius: 10,
+              background: "rgba(255,100,80,0.1)",
+              color: "#ff8070",
+              fontFamily: "'Manrope',sans-serif",
+              fontWeight: 700,
+              fontSize: "0.875rem",
+              cursor: "pointer",
+              transition: "all 0.15s ease",
+              opacity: cancelLessonMutation.isPending ? 0.5 : 1,
+            }}
+          >
+            {cancelLessonMutation.isPending ? "מבטל..." : "כן, בטל שיעור"}
+          </button>
+        </DialogActions>
+      </Dialog>
 
       {/* ── Payment Dialog ─────────────────────────────────────── */}
       <Dialog

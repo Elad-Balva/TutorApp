@@ -377,6 +377,21 @@ public class LessonService : ILessonService
         _logger.LogInformation("Lesson {LessonId} updated for teacher {TeacherId}", lessonId, _currentTeacher.TeacherId);
     }
 
+    public async Task CancelLessonAsync(Guid lessonId, CancellationToken ct)
+    {
+        var lesson = await _db.Lessons
+            .FirstOrDefaultAsync(x => x.Id == lessonId && x.TeacherId == _currentTeacher.TeacherId, ct)
+            ?? throw new KeyNotFoundException("Lesson not found");
+
+        if (lesson.Status != LessonStatus.Scheduled)
+            throw new InvalidOperationException("ניתן לבטל רק שיעורים מתוכננים");
+
+        lesson.Status = LessonStatus.Cancelled;
+        await _db.SaveChangesAsync(ct);
+
+        _logger.LogInformation("Lesson {LessonId} cancelled by teacher {TeacherId}", lessonId, _currentTeacher.TeacherId);
+    }
+
     public async Task MarkLessonParticipantPaidAsync(Guid lessonId, Guid studentId, MarkLessonParticipantPaidRequest request, CancellationToken ct)
     {
         var lesson = await _db.Lessons

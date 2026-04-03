@@ -15,7 +15,7 @@ const TABS = [
   { id: "settings",  label: "הגדרות",  icon: "settings"   },
   { id: "payments",  label: "תשלומים", icon: "payments"   },
   { id: "students",  label: "תלמידים", icon: "group"      },
-  { id: "dashboard", label: "לוח",     icon: "dashboard"  },
+  { id: "dashboard", label: "שיעורים", icon: "dashboard"  },
 ];
 
 function SettingsPage() {

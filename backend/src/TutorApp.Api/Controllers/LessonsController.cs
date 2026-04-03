@@ -57,6 +57,13 @@ public class LessonsController : ControllerBase
         return NoContent();
     }
 
+    [HttpPost("{lessonId:guid}/cancel")]
+    public async Task<IActionResult> Cancel(Guid lessonId, CancellationToken ct)
+    {
+        await _lessonService.CancelLessonAsync(lessonId, ct);
+        return NoContent();
+    }
+
     [HttpPost("{lessonId:guid}/participants/{studentId:guid}/mark-paid")]
     public async Task<IActionResult> MarkParticipantPaid(
         Guid lessonId,

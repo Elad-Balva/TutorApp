@@ -95,7 +95,7 @@ export function StudentsPage() {
           onClick={() => { resetForm(); setAddOpen(true); }}
         >
           <span className="material-symbols-outlined" style={{ fontSize: 20, color: "#002a51" }}>person_add</span>
-          + הוספת תלמיד
+          הוספת תלמיד
         </button>
 
         {/* Search input */}
